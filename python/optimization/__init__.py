@@ -9,6 +9,7 @@ Modules
   rules       design rules (symmetry, balance, 10 % rule, contiguity), encodings, repair
   evaluate    Problem definition + batch evaluator (reserve factors, safety margin, cache, counters)
   exhaustive  exact search (enumeration / count-level enumeration) for small design spaces
+  stiffness   fixed ply count, stiffest laminate (objective "max_stiffness"): order, default N, exact search
   ga          single-objective genetic algorithm
   nsga2       NSGA-II (pymoo) with repair
   api         optimize(...) -> OptimizationResult  (entry point for Layer 2 / Layer 3)
@@ -27,7 +28,8 @@ if _os.environ.get("COMPOSITE_USE_WMI") != "1" and "_wmi" not in _sys.modules:
     _sys.modules["_wmi"] = None
 
 _EXPORTS = {"Material": "material", "get_material": "material", "Plate": "evaluate", "Problem": "evaluate",
-            "Rules": "rules", "optimize": "api", "OptimizationResult": "api", "make_problem": "api", "quasi_isotropic": "api"}
+            "Rules": "rules", "optimize": "api", "OptimizationResult": "api", "make_problem": "api", "quasi_isotropic": "api",
+            "default_ply_count": "stiffness", "exact_stiffness": "stiffness"}
 
 
 def __getattr__(name):  # lazy imports: "from optimization import optimize" without loading everything up front

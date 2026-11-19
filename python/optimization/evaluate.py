@@ -11,6 +11,12 @@ Symmetric laminates use a fast exact path: with B = 0 and in-plane loads only, t
 eps0 = A^-1 N, and A depends only on the ply counts, so ply stresses depend only on the ply angle;
 D = sum of Qbar(angle) * position weight. Non-symmetric laminates use the general CLT path (A, B, D, curvature,
 stresses at ply mid-height as in clt_engine.m).
+
+compute_plies(..., details=True) also returns the quantities computed on the way (the values above are unchanged):
+A, D (P, 3, 3) [N/m, N m], the strength margin rf_strength = min over the strength criteria (Max Stress, Tsai-Wu,
+[Max Strain]), the buckling factor lam (inf when not computed: no buckling criterion, a load that cannot buckle the
+plate, or lazy evaluation of a design below the safety factor in strength) and the in-plane compliance
+c = N . eps0 = N^T A^-1 N [N/m] (largest value over the load cases +Nxy / -Nxy).
 """
 from __future__ import annotations
 
@@ -103,8 +109,11 @@ class Evaluator:
     margin returned is the strength RF (an upper bound of the true margin; they are infeasible either way) and
     their buckling RF is reported as inf. NSGA-II sets lazy = False (it needs exact margins for its front)."""
 
-    def __init__(self, problem: Problem, n_genes: Optional[int] = None):
+    def __init__(self, problem: Problem, n_genes: Optional[int] = None, objective: Optional[str] = None):
         self.p = problem
+        # objective "max_stiffness": evaluate() also returns rf_strength, lam and c (cached with the design)
+        self.objective = objective
+        self.extra: Dict[bytes, Tuple] = {}
         self.enc = problem.enc
         self.Q = clt.q_matrix(problem.material.E1, problem.material.E2, problem.material.G12, problem.material.nu12)
         self.Qb = clt.qbar(self.Q, ANGLES)                                   # (4, 3, 3)
@@ -141,31 +150,40 @@ class Evaluator:
             if k not in self.cache and k not in seen:
                 todo.append(i)
                 seen.add(k)
+        stiff = self.objective == "max_stiffness"
         if todo:
-            res = self.compute_plies(self.enc.decode(g[todo]))
+            res = self.compute_plies(self.enc.decode(g[todo]), details=stiff)
             for j, i in enumerate(todo):
                 self.cache[keys[i]] = (res["n_plies"][j], res["margin"][j], res["rf"][j], res["crit"][j])
+                if stiff:
+                    self.extra[keys[i]] = (res["rf_strength"][j], res["lam"][j], res["c"][j])
             self.n_unique += len(todo)
         n = np.array([self.cache[k][0] for k in keys])
         margin = np.array([self.cache[k][1] for k in keys])
         rf = np.array([self.cache[k][2] for k in keys])
         crit = np.array([self.cache[k][3] for k in keys])
-        return {"n_plies": n, "margin": margin, "rf": rf, "crit": crit,
-                "feasible": margin >= self.p.safety_factor}
+        out = {"n_plies": n, "margin": margin, "rf": rf, "crit": crit,
+               "feasible": margin >= self.p.safety_factor}
+        if stiff:
+            ex = np.array([self.extra[k] for k in keys], dtype=float).reshape(len(keys), 3)
+            out.update(rf_strength=ex[:, 0], lam=ex[:, 1], c=ex[:, 2])
+        return out
 
-    def compute_plies(self, plies: np.ndarray) -> Dict[str, np.ndarray]:
-        """No cache, no counters. plies: (P, W) ply codes, EMPTY padding at the start (right-aligned)."""
+    def compute_plies(self, plies: np.ndarray, details: bool = False) -> Dict[str, np.ndarray]:
+        """No cache, no counters. plies: (P, W) ply codes, EMPTY padding at the start (right-aligned).
+        details=True adds A, D, rf_strength, lam and c (see the module doc)."""
         plies = np.atleast_2d(plies)
         if self.p.rules.symmetric:
-            return self._symmetric(plies)
+            return self._symmetric(plies, details)
         full = full_laminate(plies, False)
         if full.dtype != object:
-            return self._general(full)
-        out = {k: [None] * len(plies) for k in ("n_plies", "margin", "rf", "crit")}
+            return self._general(full, details)
+        keys = ("n_plies", "margin", "rf", "crit") + (("A", "D", "rf_strength", "lam", "c") if details else ())
+        out = {k: [None] * len(plies) for k in keys}
         lens = np.array([len(r) for r in full])
         for L in np.unique(lens):
             idx = np.where(lens == L)[0]
-            r = self._general(np.array([full[i] for i in idx], dtype=int))
+            r = self._general(np.array([full[i] for i in idx], dtype=int), details)
             for k in out:
                 for j, i in enumerate(idx):
                     out[k][i] = r[k][j]
@@ -210,7 +228,16 @@ class Evaluator:
             return per_case[0]
         return {k: np.minimum.reduce([r[k] for r in per_case]) for k in per_case[0]}
 
-    def _symmetric(self, half: np.ndarray):
+    def _details(self, out: Dict[str, np.ndarray], A: np.ndarray, D: np.ndarray, comp) -> Dict[str, np.ndarray]:
+        """A, D, strength margin, buckling factor and in-plane compliance of a batch (details=True)."""
+        crit = list(self.p.criteria)
+        strength = [i for i, c in enumerate(crit) if c != "buckling"]
+        P = len(out["rf"])
+        rs = out["rf"][:, strength].min(axis=1) if strength else np.full(P, np.inf)
+        lam = out["rf"][:, crit.index("buckling")] if "buckling" in crit else np.full(P, np.inf)
+        return {"A": A, "D": D, "rf_strength": rs, "lam": lam, "c": np.max(np.stack(comp), axis=0)}
+
+    def _symmetric(self, half: np.ndarray, details: bool = False):
         P, W = half.shape
         t = self.p.ply_thickness
         counts = np.stack([(half == k).sum(axis=1) for k in range(4)], axis=1)          # (P, 4)
@@ -218,8 +245,11 @@ class Evaluator:
         A = 2.0 * t * np.einsum("pk,kij->pij", counts.astype(float), self.Qb)
         present = counts > 0
         per_case = []
+        comp = []
         for N in self.N_cases:
             eps0 = clt.midplane_strain_symmetric(A, N)
+            if details:
+                comp.append(eps0 @ N)                              # c = N . eps0 = N^T A^-1 N  [N/m]
             strain12, stress12 = clt.ply_stress_from_strain(eps0, ANGLES, self.Q)       # (P, 4, 3)
             per_case.append({k: np.where(present, v, np.inf).min(axis=1)
                              for k, v in self._strength_rf(stress12, strain12).items()})
@@ -228,9 +258,12 @@ class Evaluator:
         w = 2.0 * t ** 3 * ((j + 1.0) ** 3 - j ** 3) / 3.0         # both mirrored plies
         Qp = self.Qb_ext[np.where(half >= 0, half, 4)]             # (P, W, 3, 3)
         D = np.einsum("w,pwij->pij", w, Qp)
-        return self._finish(n_plies, rf_s, D)
+        out = self._finish(n_plies, rf_s, D)
+        if details:
+            out.update(self._details(out, A, D, comp))
+        return out
 
-    def _general(self, full: np.ndarray):
+    def _general(self, full: np.ndarray, details: bool = False):
         P, n = full.shape
         t = np.full(full.shape, self.p.ply_thickness)
         ang = ANGLES[full]
@@ -239,16 +272,22 @@ class Evaluator:
         z = clt.z_coordinates(t)
         zmid = (z[:, :-1] + z[:, 1:]) / 2.0
         per_case = []
+        comp = []
         for N in self.N_cases:
             rhs = np.broadcast_to(np.concatenate([N, np.zeros(3)]), (P, 6))[..., None]
             sol = np.linalg.solve(ABD, rhs)[..., 0]
             eps0, kappa = sol[:, :3], sol[:, 3:]
+            if details:
+                comp.append(eps0 @ N)
             eps_xy = eps0[:, None, :] + zmid[..., None] * kappa[:, None, :]
             strain12 = clt.strain_to_material(eps_xy, ang)
             stress12 = strain12 @ self.Q.T
             per_case.append({k: v.min(axis=1) for k, v in self._strength_rf(stress12, strain12).items()})
         rf_s = self._min_cases(per_case)
-        return self._finish(np.full(P, n), rf_s, D)
+        out = self._finish(np.full(P, n), rf_s, D)
+        if details:
+            out.update(self._details(out, A, D, comp))
+        return out
 
     def lam_full(self, Dvec: np.ndarray) -> np.ndarray:
         """Ritz (D16, D26) buckling factors of D vectors (P, 6): the smallest over the load cases (+Nxy, -Nxy)."""
@@ -290,6 +329,9 @@ def analyze_design(problem: Problem, full: Sequence[int]) -> Dict:
     out = dict(det[sign])
     out["rf"] = {c: min(det["+"]["rf"][c], det["-"]["rf"][c]) for c in det["+"]["rf"]}
     out["margin"] = min(det["+"]["margin"], det["-"]["margin"])
+    out["strength_margin"] = min(det["+"]["strength_margin"], det["-"]["strength_margin"])
+    out["compliance_c"] = max(det["+"]["compliance_c"], det["-"]["compliance_c"])
+    out["lambda"] = out["rf"].get("buckling")
     out["governing_shear_sign"] = sign
     out["by_shear_sign"] = {s: {k: d[k] for k in ("rf", "margin", "governing", "critical_ply", "critical_angle",
                                                    "buckling_ritz_full")} for s, d in det.items()}
@@ -334,6 +376,7 @@ def _analyze_one(problem: Problem, full: Sequence[int]) -> Dict:
         rf["buckling"] = float(lam_used) / problem.criterion_factors.get("buckling", 1.0)
     governing = min(rf, key=lambda c: rf[c])
     margin = rf[governing]
+    strength_rf = [v for c, v in rf.items() if c != "buckling"]
     ms_ratios = failure.max_stress_ratios(stress, m)
     k = crit_ply.get(governing)
     mode = None
@@ -350,6 +393,10 @@ def _analyze_one(problem: Problem, full: Sequence[int]) -> Dict:
         "D16_over_D11": float(abs(D[0, 2]) / D[0, 0]), "D26_over_D22": float(abs(D[1, 2]) / D[1, 1]),
         "ABD": res["ABD"], "max_failure_index": res["max_failure_index"], "critical_ply_matlab_style": res["critical_ply"],
         "thickness_mm": float(len(f) * problem.ply_thickness * 1e3),
+        # added for the fixed-thickness objectives (values above unchanged): A [N/m], D [N m], strength margin =
+        # min over the strength criteria, lambda = buckling RF used above, c = N . eps0 = N^T A^-1 N [N/m]
+        "A": res["A"], "D": D, "strength_margin": float(min(strength_rf)) if strength_rf else float("inf"),
+        "lambda": rf.get("buckling"), "compliance_c": float(res["eps0"] @ np.array([Nx, Ny, Nxy], dtype=float)),
     }
 
 

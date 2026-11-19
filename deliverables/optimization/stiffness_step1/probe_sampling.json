@@ -1,0 +1,22 @@
+[
+ {
+  "case": "C6",
+  "thickness": "t0125",
+  "N": 32,
+  "n_random_valid_designs": 20000,
+  "n_meeting_strength": 16938,
+  "best_random_lambda": 9.652264041114393,
+  "exact_lambda": 10.09519132203049,
+  "random_never_better": true
+ },
+ {
+  "case": "C5",
+  "thickness": "t0183",
+  "N": 40,
+  "n_random_valid_designs": 20000,
+  "n_meeting_strength": 20000,
+  "best_random_lambda": 3.2350652602997325,
+  "exact_lambda": 3.318635602805532,
+  "random_never_better": true
+ }
+]

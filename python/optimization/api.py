@@ -10,6 +10,13 @@ time_limit), "ga" (single objective: fewest plies, then largest margin), "nsga2"
 Never returns a rule-violating or infeasible design silently: status is "optimal" (proven by exhaustive search),
 "feasible" (found by a heuristic), "infeasible" (no design with margin >= safety factor in the ply range; the
 best design found is returned and flagged) or "unknown (time limit)".
+
+objective: "min_plies" (default, fewest plies: the behaviour above), "max_margin" (largest safety margin for a
+fixed ply count) or "max_stiffness" (fixed ply count, stiffest laminate: largest buckling factor, or smallest
+in-plane compliance when the load cannot buckle the plate; see stiffness.py). fixed_plies = N fixes the ply count
+of the last two; max_stiffness without it uses the smallest quasi-isotropic laminate [0/45/-45/90]_ks that meets the
+constraints (stiffness.default_ply_count). For max_stiffness the exact search may stop at the time limit: status
+"incomplete" with the gap to the open bound, never "optimal".
 """
 from __future__ import annotations
 
@@ -58,6 +65,8 @@ class OptimizationResult:
     matlab: Optional[Dict] = None
     warnings: List[str] = field(default_factory=list)
     problem: Dict = field(default_factory=dict)
+    objective: str = "min_plies"
+    stiffness: Optional[Dict] = None        # max_stiffness / max_margin with a fixed ply count: stiffness_record()
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -74,6 +83,16 @@ class OptimizationResult:
                  + ("(buckling: Ritz with D16, D26)" if self.problem.get("buckling_model") == "ritz_full"
                     else "(closed-form buckling ignores D16, D26)"),
                  f"  evaluations: {self.n_evaluations}  time: {self.runtime_s:.2f} s"]
+        if self.stiffness is not None:
+            s = self.stiffness
+            qi = s.get("qi")
+            lines.append(f"  objective: {self.objective}   N = {s['N']} plies   lambda = {s['lambda']:.6g}   "
+                         f"c = {s['c_N_per_m']:.6g} N/m   strength margin = {s['strength_margin']:.6g}   "
+                         f"proven: {s['proven']}" + (f"   gap: {100 * s['gap']:.3g} %" if s.get("gap") else ""))
+            if qi:
+                lines.append(f"  vs {qi['notation']}: lambda = {qi['lambda']:.6g}, c = {qi['c_N_per_m']:.6g} N/m"
+                             + (f" -> {s['improvement_vs_qi_pct']:+.3g} % ({s['improvement_vs_qi_meaning']})"
+                                if s.get("improvement_vs_qi_pct") is not None else ""))
         if self.matlab is not None:
             lines.append(f"  MATLAB check: {'PASS' if self.matlab['pass'] else 'FAIL'}  margin MATLAB = "
                          f"{self.matlab['margin_matlab']:.6g}")
@@ -162,7 +181,8 @@ def optimize(loads, material: Union[str, Material, None] = "IM7/8552", rules: Op
              buckling_model: str = "ritz_full", budget: int = 10000, pop_size: Optional[int] = None,
              ga_config: Optional[GAConfig] = None, time_limit: float = 600.0, verify_matlab: bool = False,
              target: Optional[Tuple[int, float]] = None, problem: Optional[Problem] = None,
-             verbose: bool = False, shear_both_signs: bool = False) -> OptimizationResult:
+             verbose: bool = False, shear_both_signs: bool = False, objective: str = "min_plies",
+             fixed_plies: Optional[int] = None) -> OptimizationResult:
     """Optimise the stacking sequence (fewest plies with safety margin >= safety_factor).
 
     loads: {"Nx", "Ny", "Nxy"} (N/m, tension +) or a tuple. material: name (measured CSV row / ML group) or
@@ -173,8 +193,21 @@ def optimize(loads, material: Union[str, Material, None] = "IM7/8552", rules: Op
     compression or shear), "closed_form" (Nx, Ny only, D16 = D26 = 0; used for the Le Riche & Haftka benchmark)
     or "ritz" (Nxy, D16 = D26 = 0).
     shear_both_signs: also check every design for -Nxy (a shear load that may reverse); off by default.
+    objective: "min_plies" (default, unchanged), "max_margin" or "max_stiffness" (fixed ply count; see the module
+    doc). fixed_plies: the ply count N (even, 8-64) of the fixed-thickness objectives; max_stiffness without it uses
+    the default N of stiffness.default_ply_count (raises stiffness.NoFeasiblePlyCount when there is none).
     """
+    if objective not in OBJECTIVES:
+        raise ValueError(f"objective must be one of {OBJECTIVES}")
     t0 = time.perf_counter()
+    if objective != "min_plies" or fixed_plies is not None:
+        if objective == "min_plies":
+            raise ValueError("objective 'min_plies' searches the ply count; fixed_plies needs objective 'max_margin' "
+                             "or 'max_stiffness'")
+        p = problem or make_problem(loads, material, rules, safety_factor, plate, ply_thickness, encoding, criteria,
+                                    f12_star, buckling_model, shear_both_signs=shear_both_signs)
+        return _optimize_fixed(p, objective, fixed_plies, method, seed, budget, pop_size, ga_config, time_limit,
+                               verify_matlab, target, verbose, t0)
     p = problem or make_problem(loads, material, rules, safety_factor, plate, ply_thickness, encoding, criteria,
                                 f12_star, buckling_model, shear_both_signs=shear_both_signs)
     if method == "exhaustive":
@@ -210,6 +243,67 @@ def optimize(loads, material: Union[str, Material, None] = "IM7/8552", rules: Op
     return result_from_design(p, full, method, seed, status, r["n_evaluations"], r["n_calls"],
                               time.perf_counter() - t0, verify_matlab, history=r["history"], pareto=pareto,
                               hit_evals=r["hit_evals"])
+
+
+OBJECTIVES = ("min_plies", "max_margin", "max_stiffness")
+
+
+def _optimize_fixed(p: Problem, objective: str, fixed_plies: Optional[int], method: str, seed: int, budget: int,
+                    pop_size: Optional[int], ga_config: Optional[GAConfig], time_limit: float, verify_matlab: bool,
+                    target, verbose: bool, t0: float) -> OptimizationResult:
+    """optimize() for the fixed-ply-count objectives "max_margin" and "max_stiffness"."""
+    from dataclasses import replace as _replace
+    from .stiffness import exact_stiffness, fixed_problem, resolve_ply_count, stiffness_record
+    sf = p.safety_factor
+    if objective == "max_stiffness":
+        p, n_info = resolve_ply_count(p, fixed_plies)
+    else:
+        if fixed_plies is not None:
+            p = fixed_problem(p, fixed_plies)
+        if p.rules.n_min != p.rules.n_max:
+            raise ValueError("objective 'max_margin' needs a fixed ply count (fixed_plies)")
+        n_info = {"source": "given", "n": p.rules.n_min}
+    extra, kw = {"ply_count": n_info}, {}
+    if method == "exhaustive":
+        if objective == "max_stiffness":
+            r = exact_stiffness(p, time_limit=time_limit, verbose=verbose)
+            full, status, proven = r["full"], r["status"], r["proven"]
+            n_eval = r.get("n_eigen", r["n_count_tuples"])
+            extra.update(gap=r.get("gap"), upper_bound=r.get("upper_bound"), exact_method=r["method"],
+                         max_rf_strength=r["max_rf_strength"], infeasible_reason=r["infeasible_reason"])
+        else:
+            if not ("buckling" in p.criteria and p.has_compression) and p.rules.symmetric:
+                ex = strength_only_exact(p)
+            elif p.buckling_model == "ritz_full":
+                ex = exact_full(p, time_limit=time_limit, verbose=verbose)
+            else:
+                ex = exhaustive(p, time_limit=time_limit, objective="max_margin", verbose=verbose)
+            rec = ex["per_n"][0] if ex["per_n"] else None
+            if rec is None or rec.get("full") is None:
+                raise RuntimeError("exact search: no design of this ply count within the time limit")
+            proven = rec.get("max_margin") is not None and bool(rec.get("complete", True))
+            m = rec["max_margin"] if proven else rec.get("max_margin_lower")
+            stopped = ("time limit" if time.perf_counter() - t0 >= time_limit
+                       else "arrangement cap of exact_full (a ply-count combination has > 3 000 000 arrangements)")
+            status = ("optimal" if m >= sf else "infeasible") if proven else f"not proven ({stopped})"
+            full, n_eval = rec["full"], ex.get("n_evaluated", 0)
+        n_calls, run_seed = n_eval, None
+    elif method == "ga":
+        cfg = _replace(ga_config or GAConfig(budget=budget, pop_size=pop_size or GAConfig.pop_size),
+                       objective=objective)
+        r = GeneticAlgorithm(p, cfg, seed).run(target=target, verbose=verbose)
+        full = full_laminate(p.enc.decode(r["best_genes"][None]), True)[0]
+        status, proven = ("feasible" if r["feasible"] else "infeasible"), False
+        n_eval, n_calls, run_seed = r["n_evaluations"], r["n_calls"], seed
+        kw = {"history": r["history"], "hit_evals": r["hit_evals"]}
+    else:
+        raise ValueError("a fixed ply count needs method 'exhaustive' or 'ga'")
+    full = [int(x) for x in full]
+    runtime = time.perf_counter() - t0
+    rec = stiffness_record(p, full[:len(full) // 2], status=status, proven=proven, runtime_s=runtime,
+                           objective=objective, **extra)
+    return result_from_design(p, full, method, run_seed, status, n_eval, n_calls, runtime, verify_matlab,
+                              objective=objective, stiffness=rec, **kw)
 
 
 def quasi_isotropic(problem: Problem, n_max: int = 128, n_min: int = 8) -> Dict:
@@ -251,7 +345,11 @@ def design_search(problem: Problem, objective: str = "min_plies", time_limit: fl
     search cannot finish ("best found", with the proven lower bound of the ply count when there is one).
     objective: "min_plies" (fewest plies with margin >= safety factor) or "max_margin" (largest margin for the ply
     count rules.n_min == rules.n_max). Returns {"status", "proven", "full", "exact", "ga", "time_s"};
-    status: "optimal" | "infeasible" (both proven) | "best found" | "no feasible design found" (GA, not proven)."""
+    status: "optimal" | "infeasible" (both proven) | "best found" | "no feasible design found" (GA, not proven).
+    objective "max_stiffness" (fixed ply count): stiffness.stiffness_search (same keys, plus "kind" and "gap")."""
+    if objective == "max_stiffness":
+        from .stiffness import stiffness_search
+        return stiffness_search(problem, time_limit=time_limit, seed=seed, budget=budget)
     if objective not in ("min_plies", "max_margin"):
         raise ValueError("objective must be 'min_plies' or 'max_margin'")
     if objective == "max_margin" and problem.rules.n_min != problem.rules.n_max:

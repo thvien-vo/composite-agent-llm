@@ -1,0 +1,3 @@
+case,thickness,N,n_random_valid_designs,n_meeting_strength,best_random_lambda,exact_lambda,random_never_better
+C6,t0125,32,20000,16938,9.652264041114393,10.09519132203049,True
+C5,t0183,40,20000,20000,3.2350652602997325,3.318635602805532,True

@@ -22,6 +22,13 @@ counted in the same budget; at a feasible local optimum it then tries to THIN th
 removal is repaired, the few thinner designs with the best margins are re-optimised at their ply count
 (swaps / single-ply changes), and the first one reaching the safety factor is accepted. Local improvement of GA
 designs follows Kogiso et al. (1994), cited in [P].
+
+Objective "max_stiffness" (fixed ply count, see stiffness.py): the ply count must be fixed (rules.n_min == n_max);
+the ply addition / deletion operators are switched off and the local search uses swaps and single-ply changes only
+(never a change of the ply count). Ranking: feasible first (strength margin and buckling factor >= safety factor),
+then the objective (largest lambda, or smallest in-plane compliance c when the load cannot buckle the plate), then
+the strength margin; improvements and the final answer use the same order with the 1e-9 tie rule and the
+lexicographic tie-break of stiffness.py.
 """
 from __future__ import annotations
 
@@ -68,7 +75,12 @@ class GeneticAlgorithm:
         self.seed = seed
         self.rng = np.random.default_rng(seed)
         self.repairer = Repairer(problem.enc, problem.rules)
-        self.ev = Evaluator(problem, n_genes=self.repairer.n_genes)
+        self.stiff = self.cfg.objective == "max_stiffness"
+        if self.stiff:
+            from .stiffness import check_problem, objective_kind
+            check_problem(problem)                      # fixed ply count
+            self.kind = objective_kind(problem)
+        self.ev = Evaluator(problem, n_genes=self.repairer.n_genes, objective="max_stiffness" if self.stiff else None)
         self.n_genes = self.repairer.n_genes
         self.nsym = problem.enc.n_symbols
         self.pm = self.cfg.p_mutation if self.cfg.p_mutation is not None else 1.0 / self.n_genes
@@ -86,10 +98,11 @@ class GeneticAlgorithm:
         for k in range(len(s)):
             if rng.random() < self.pm:
                 s[k] = int((s[k] + rng.integers(1, self.nsym)) % self.nsym)
-        if rng.random() < self.cfg.p_add and len(s) < self.repairer.Lmax:
-            s.insert(int(rng.integers(len(s) + 1)), int(rng.integers(self.nsym)))
-        if rng.random() < self.cfg.p_delete and len(s) > self.repairer.Lmin:
-            s.pop(int(rng.integers(len(s))))
+        if not self.stiff:      # max_stiffness: fixed ply count, no ply addition / deletion
+            if rng.random() < self.cfg.p_add and len(s) < self.repairer.Lmax:
+                s.insert(int(rng.integers(len(s) + 1)), int(rng.integers(self.nsym)))
+            if rng.random() < self.cfg.p_delete and len(s) > self.repairer.Lmin:
+                s.pop(int(rng.integers(len(s))))
         p = self.cfg.p_swap
         while rng.random() < p and len(s) > 1:
             self._swap(s)
@@ -153,6 +166,45 @@ class GeneticAlgorithm:
                 return self._local_search(*thin)
         return g, key
 
+    # ------------------------------------------------------------------ objective-dependent helpers
+    def _order(self, res: Dict[str, np.ndarray]) -> np.ndarray:
+        if self.stiff:
+            from .stiffness import rank_order
+            return rank_order(res, self.p.safety_factor, self.kind)
+        return _rank(res, self.p.safety_factor, self.cfg.objective)
+
+    def _key(self, res: Dict[str, np.ndarray], i: int, genes: np.ndarray):
+        if self.stiff:
+            from .stiffness import make_key
+            return make_key(self.kind, self.p.safety_factor, float(res["rf_strength"][i]), float(res["lam"][i]),
+                            float(res["c"][i]), genes)
+        return (int(res["n_plies"][i]), float(res["margin"][i]))
+
+    def _improves(self, a, b) -> bool:
+        if self.stiff:
+            from .stiffness import key_better
+            return key_better(a, b)
+        return a[1] > b[1] if self.cfg.objective == "max_margin" else better(a, b, self.p.safety_factor)
+
+    def _local_search_stiff(self, g: np.ndarray, key) -> tuple:
+        """max_stiffness: steepest ascent with swaps and single-ply changes (the ply count never changes); stops at
+        a local optimum, at a design already visited or at the budget."""
+        n0 = int(np.sum(g >= 0))
+        visited = {g.tobytes()}
+        while self.ev.n_unique < self.cfg.budget:
+            nb = self._neighbours(g, deletions=False)
+            nb = nb[[np.sum(x >= 0) == n0 and x.tobytes() not in visited for x in nb]]
+            if len(nb) == 0:
+                break
+            res = self.ev.evaluate(nb)
+            k = self._order(res)[0]
+            cand = self._key(res, k, nb[k])
+            if not self._improves(cand, key):
+                break
+            g, key = nb[k].copy(), cand
+            visited.add(g.tobytes())
+        return g, key
+
     def _climb_fixed(self, g: np.ndarray, key: tuple) -> tuple:
         """Steepest ascent of the margin at a fixed ply count (swaps and single-ply changes only)."""
         n0 = key[0]
@@ -203,28 +255,37 @@ class GeneticAlgorithm:
         history, hit_at, gen, stall, last_unique = [], None, 0, 0, self.ev.n_unique
         best_seen = None
         while True:
-            order = _rank(res, sf, cfg.objective)
+            order = self._order(res)
             b = order[0]
-            best = (int(res["n_plies"][b]), float(res["margin"][b]))
-            if cfg.local_search and (best_seen is None or (best[1] > best_seen[1] if cfg.objective == "max_margin"
-                                                          else better(best, best_seen, sf))):
-                g2, key2 = self._local_search(pop[b].copy(), best)
+            best = self._key(res, b, pop[b])
+            if cfg.local_search and (best_seen is None or self._improves(best, best_seen)):
+                g2, key2 = (self._local_search_stiff if self.stiff else self._local_search)(pop[b].copy(), best)
                 if key2 != best:  # put the improved design in place of the worst member
                     w = order[-1]
                     pop[w] = g2
                     r2 = self.ev.evaluate(g2[None])
                     for k in res:
                         res[k][w] = r2[k][0]
-                    order = _rank(res, sf, cfg.objective)
+                    order = self._order(res)
                     b = order[0]
-                    best = (int(res["n_plies"][b]), float(res["margin"][b]))
+                    best = self._key(res, b, pop[b])
                 best_seen = best
-            history.append({"gen": gen, "evals": self.ev.n_unique, "n_plies": best[0], "margin": best[1],
-                            "feasible": best[1] >= sf})
-            if target is not None and hit_at is None and _is_hit(best, target, cfg.objective):
-                hit_at = self.ev.n_unique
+            if self.stiff:
+                history.append({"gen": gen, "evals": self.ev.n_unique, "n_plies": int(res["n_plies"][b]),
+                                "margin": float(res["margin"][b]), "feasible": best.feasible, "tier": best.tier,
+                                "objective": best.primary, "strength_margin": float(res["rf_strength"][b])})
+                if target is not None and hit_at is None:
+                    from .stiffness import reaches
+                    if reaches(best, target):
+                        hit_at = self.ev.n_unique
+            else:
+                history.append({"gen": gen, "evals": self.ev.n_unique, "n_plies": best[0], "margin": best[1],
+                                "feasible": best[1] >= sf})
+                if target is not None and hit_at is None and _is_hit(best, target, cfg.objective):
+                    hit_at = self.ev.n_unique
             if verbose and gen % 20 == 0:
-                print(f"  GA gen {gen:4d} evals {self.ev.n_unique:6d} best n={best[0]} margin={best[1]:.5g}")
+                print(f"  GA gen {gen:4d} evals {self.ev.n_unique:6d} best "
+                      + (f"{best[:3]}" if self.stiff else f"n={best[0]} margin={best[1]:.5g}"))
             stall = stall + 1 if self.ev.n_unique == last_unique else 0
             last_unique = self.ev.n_unique
             if self.ev.n_unique >= cfg.budget or gen >= cfg.max_generations or stall >= cfg.stall_generations:
@@ -253,14 +314,22 @@ class GeneticAlgorithm:
                 children.append(child)
             pop = np.array(children, dtype=np.int8)
             res = self.ev.evaluate(pop)
-        order = _rank(res, sf, cfg.objective)
-        b = order[0]
-        return {"best_genes": pop[b].copy(), "n_plies": int(res["n_plies"][b]), "margin": float(res["margin"][b]),
-                "feasible": bool(res["margin"][b] >= sf), "history": history, "hit_evals": hit_at,
-                "n_evaluations": self.ev.n_unique, "n_calls": self.ev.n_calls, "generations": gen,
-                "stopped_by": "budget" if self.ev.n_unique >= cfg.budget else ("stall" if stall >= cfg.stall_generations
-                                                                                else "generations"),
-                "time_s": time.perf_counter() - t0, "repair_stats": dict(self.repairer.stats)}
+        if self.stiff:      # final answer: the order of stiffness.py with the 1e-9 tie rule
+            from .stiffness import select
+            b = select(res["rf_strength"], res["lam"], res["c"], pop, self.kind, sf)
+        else:
+            order = _rank(res, sf, cfg.objective)
+            b = order[0]
+        out = {"best_genes": pop[b].copy(), "n_plies": int(res["n_plies"][b]), "margin": float(res["margin"][b]),
+               "feasible": bool(res["margin"][b] >= sf), "history": history, "hit_evals": hit_at,
+               "n_evaluations": self.ev.n_unique, "n_calls": self.ev.n_calls, "generations": gen,
+               "stopped_by": "budget" if self.ev.n_unique >= cfg.budget else ("stall" if stall >= cfg.stall_generations
+                                                                               else "generations"),
+               "time_s": time.perf_counter() - t0, "repair_stats": dict(self.repairer.stats)}
+        if self.stiff:
+            out.update(kind=self.kind, rf_strength=float(res["rf_strength"][b]), lam=float(res["lam"][b]),
+                       c=float(res["c"][b]), key=self._key(res, b, pop[b]))
+        return out
 
 
 def _is_hit(best: tuple, target: tuple, objective: str, rtol: float = 1e-9) -> bool:
