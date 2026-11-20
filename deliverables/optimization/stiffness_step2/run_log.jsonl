@@ -1,0 +1,8 @@
+{"time": "2026-11-20 15:26:54", "stage": "problems", "event": "start", "free_gb": 5.54, "workers": 1, "tasks": 15, "already_saved": 14}
+{"time": "2026-11-20 16:07:08", "stage": "problems", "event": "start", "free_gb": 7.79, "workers": 1, "tasks": 15, "already_saved": 14}
+{"time": "2026-11-20 17:07:47", "stage": "ga_runs", "event": "start", "free_gb": 6.36, "workers": 2, "tasks": 600, "already_saved": 0}
+{"time": "2026-11-20 17:30:42", "stage": "ga_runs", "event": "stopped by the user (machine shutdown); finished runs saved", "already_saved": 272}
+{"time": "2026-11-20 20:07:59", "stage": "ga_runs", "event": "start", "free_gb": 5.02, "workers": 2, "tasks": 600, "already_saved": 272}
+{"time": "2026-11-20 20:32:55", "stage": "tradeoff", "event": "start", "free_gb": 9.08, "workers": 2, "tasks": 16, "already_saved": 0}
+{"time": "2026-11-20 20:44:43", "stage": "matlab_check", "event": "start", "free_gb": 9.05, "workers": 0, "tasks": 30, "already_saved": 0}
+{"time": "2026-11-20 20:45:29", "stage": "regression_demo", "event": "start", "free_gb": 8.06, "workers": 0, "tasks": 1, "already_saved": 0}

@@ -206,10 +206,30 @@ sequence under the same design rules. Two constraints apply: strength margin min
 and buckling factor λ ≥ 1.5 (Ritz model of the optimiser, smaller value over +Nxy and −Nxy). The objective depends
 on whether the load can buckle the plate. If it can, the largest λ wins. If it cannot (tension only, λ = ∞ for every
 laminate), the smallest in-plane compliance c = Nᵀ A⁻¹ N wins (N/m, i.e. J/m²). Values within a relative 10⁻⁹ count
-as equal; a tie goes to the larger strength margin, then to the lexicographically smallest sequence.
-Without `fixed_plies`, N is the ply count of the smallest quasi-isotropic laminate `[0/45/-45/90]ks` (N = 8k,
-8–64) that meets both constraints. If none does, the problem is reported as infeasible and no N is chosen. A given N
-must be even, between 8 and 64; if no stacking sequence of N plies meets the constraints, the result is infeasible.
+as equal. Ties, buckling objective: larger strength margin, then the lexicographically smallest sequence (0 < +45 <
+−45 < 90 from the outer ply). Ties, compliance objective: (1) smallest c, (2) largest strength margin, (3) largest
+bending stiffness in the main load direction (the largest of |Nx|, |Ny|, |Nxy|: D11, D22 or D66), (4) the
+lexicographically smallest sequence. For in-plane loads on a symmetric laminate, c and the strength margin depend on
+the ply counts per angle only (checked over every valid design of 16 and 24 plies: identical numbers within each count
+tuple), so the stacking order is decided by D: the exact search finds the best count tuples by (1)–(2) and then an
+exact dynamic programme over the valid arrangements of these tuples gives the largest D of (3) and the sequence of (4).
+
+Choice of N without `fixed_plies` (column "N from" of the results): the ply count of the smallest quasi-isotropic
+laminate `[0/45/-45/90]ks` (N = 8k, 8–64) that meets both constraints ("QI_ks"); if none does, the smallest ply count
+with which the objective `min_plies` finds a feasible design ("min_plies fallback", with whether that count is proven
+to be the fewest; when the load cannot buckle the plate it is proven by a count-level scan of the largest strength
+margin). Only if neither exists is the problem reported as infeasible with no N. A given N must be even, between 8 and
+64; if no stacking sequence of N plies meets the constraints, the result is infeasible.
+
+Reported buckling factor: the search and its proofs use the Ritz double sine series with 8 × 8 terms ("proven in the
+8x8 Ritz model"). Every λ reported for `max_stiffness` (results, tables, figures, `analyze_design`) is the converged
+value with 16 × 16 terms, given with the polynomial Ritz solution (p = 16) and the 8 × 8 value next to it;
+`analyze_design` and the result file give the same number for the same design. The k best designs of the 8 × 8 model
+(k = 20 first) are re-evaluated with 16 × 16 terms; k is doubled (up to 500) while (λ8 of rank 1 − λ8 of rank k) /
+λ8 of rank 1 is smaller than the largest relative 8 × 8 vs 16 × 16 difference in the list. The 16 × 16 basis contains
+the 8 × 8 one, so λ16 ≤ λ8 for every design and no design outside the list can be better by λ16; the design reported
+is the best of the list by λ16 and the result says when it differs from the 8 × 8 optimum. The objectives `min_plies`
+and `max_margin` keep the 8 × 8 values in their ranking and results (16 × 16 and polynomial values are only added).
 
 The exact search (`stiffness.exact_stiffness`) enumerates ply counts for the compliance objective; c and the
 strength margin depend on the counts only. For λ it is a branch and bound over the plies. Its bounds are Rayleigh
@@ -218,13 +238,16 @@ docstring. If the time limit is reached, the result is reported as `incomplete`,
 gap to the bound; it is never reported as proven. GA and GA + local search use the same order, with the ply-count
 operators switched off.
 
-Limitations: one load case (or ±Nxy), in-plane loads, angles 0/±45/90. λ is the Ritz value of the 8 × 8 sine series
-used by the optimiser, an upper bound; the best designs are re-checked with more terms and with an independent
-polynomial solution. "Proven" means proven for that model. The compliance objective ignores the stacking order, so
-its ties are broken by strength and then by the sequence. Comparisons between the two ply thicknesses at the same N
-are not like for like (different total thickness). Step 1 results (verification on small problems):
-`deliverables/optimization/stiffness_step1/summary.md`, produced by
-`..\venv\Scripts\python.exe -m optimization.experiments.stiffness_step1`.
+Limitations: one load case (or ±Nxy), in-plane loads, angles 0/±45/90. Ritz values are upper bounds; "proven" means
+proven in the 8 × 8 Ritz model (the 16 × 16 choice is exact by the top-k rule above, the polynomial solution is an
+independent check). Comparisons between the two ply thicknesses at the same N are not like for like (different total
+thickness). Step 1 results (verification on small problems): `deliverables/optimization/stiffness_step1/summary.md`
+(`..\venv\Scripts\python.exe -m optimization.experiments.stiffness_step1`; kept as the record of step 1). Step 2
+results (the 16 problems at the default N, with max_margin, the quasi-isotropic laminate, GA and GA + local search):
+`deliverables/optimization/stiffness_step2/summary.md`
+(`..\venv\Scripts\python.exe -m optimization.experiments.stiffness_step2`, resumable with `--reuse`); figures and
+table in `deliverables/figures_stiffness/` (`venv_fig\Scripts\python.exe
+deliverables\figures_stiffness\python\make_figures.py`).
 
 ## Main verification results
 
@@ -252,7 +275,8 @@ Optimisation (IM7/8552, simply supported 0.5 m × 0.5 m plate, safety factor 1.5
   against it, GA + local search 300/300 runs, GA 294/300, NSGA-II 213/300.
 - Le Riche & Haftka benchmark (their own assumptions): published optima 3973.01, 9998.19 and 13518.66 reproduced;
   minimum-thickness problem of 1995: 48 plies, as published.
-- MATLAB re-check of the 51 final designs: 51/51 pass. pytest: 136/136 pass (102 before the stiffness objective).
+- MATLAB re-check of the 51 final designs: 51/51 pass. pytest: 154/154 pass (102 before the stiffness objective,
+  136 after its step 1).
 - Mass saving against the smallest quasi-isotropic `[0/±45/90]ns` laminate with the same margin and the same buckling
   model (0.125 mm plies): −50 % uniaxial tension, −37.5 % biaxial tension, −16.7 % and −8.3 % compression, −25 % pure
   shear (42 vs 56 plies), −25 % tension + shear, −16.7 % compression + shear; the very large load is infeasible within
@@ -268,6 +292,19 @@ Optimisation (IM7/8552, simply supported 0.5 m × 0.5 m plate, safety factor 1.5
   search reaches the proven optimum in 16–19 runs and the plain GA in 11–16. Ritz 8 × 8 vs 16 × 16 for the 5 best
   designs: at most −0.56 %, no change of the best design. MATLAB re-check of the 16 designs: 16/16 pass. The
   previous demo design request is unchanged.
+- Fixed thickness, stiffest laminate (`max_stiffness`, step 2, `deliverables/optimization/stiffness_step2/`, the 16
+  problems at the default N, shear of both signs): 15 problems have a default N (14 from the smallest feasible QI
+  laminate; very large load with 0.18288 mm plies: 64 plies from `min_plies`); the very large load with 0.125 mm plies
+  is infeasible (no design of 8–64 plies), as in the fewest-plies study. 14 proven optima; pure shear with 0.125 mm
+  plies (N = 56) is INCOMPLETE after 3600 s: best known λ8 = 2.9054, gap 0.455 % to the bound of the 8 × 8 model, and
+  no GA run found a better design. Against the QI laminate with the same N (λ with 16 × 16 terms): +26.2 to +31.5 % in
+  compression and compression + shear, +25.5 % (best known) and +27.0 % in pure shear, +88.8 % and +102.9 % in
+  tension + shear; c −50.3 / −52.4 % in uniaxial and −17.6 / −17.4 % in biaxial tension. The 16 × 16 check changes the
+  reported design only for tension + shear with 0.18288 mm plies (both sequences in the summary). The enumeration of
+  every valid 24-ply design of that case (1 864 416 per thickness) gives the same optimum as the exact search and
+  max_margin. GA + local search (20 seeds, 10 000 designs) reaches the 8 × 8 optimum in 17–20 runs except pure shear
+  (3/20 with 40 plies; 5/20 reach the best known design with 56 plies); plain GA 0–20. MATLAB re-check of the 30
+  designs (max_stiffness and max_margin): 30/30 pass. Figures and LaTeX table: `deliverables/figures_stiffness/`.
 
 ## Limitations
 

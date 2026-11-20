@@ -1,0 +1,572 @@
+{
+ "C1|t0125|48": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 3.793412941620096,
+   "tsai_wu": 3.4335310835613972,
+   "buckling": Infinity
+  },
+  "rf_python": {
+   "max_stress": 3.793412941620096,
+   "tsai_wu": 3.4335310835613972,
+   "buckling": Infinity
+  },
+  "e_rf": {
+   "max_stress": 0.0,
+   "tsai_wu": 0.0,
+   "buckling": 0.0
+  },
+  "e_clt": 1.259458918527514e-15
+ },
+ "C1|t0183|32": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 3.8190665094795513,
+   "tsai_wu": 3.511155423865927,
+   "buckling": Infinity
+  },
+  "rf_python": {
+   "max_stress": 3.819066509479548,
+   "tsai_wu": 3.5111554238659246,
+   "buckling": Infinity
+  },
+  "e_rf": {
+   "max_stress": 8.139749494370735e-16,
+   "tsai_wu": 6.323975390430056e-16,
+   "buckling": 0.0
+  },
+  "e_clt": 1.831054049677337e-15
+ },
+ "C2|t0125|32": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 2.556119204485608,
+   "tsai_wu": 2.833496194703899,
+   "buckling": Infinity
+  },
+  "rf_python": {
+   "max_stress": 2.556119204485607,
+   "tsai_wu": 2.833496194703899,
+   "buckling": Infinity
+  },
+  "e_rf": {
+   "max_stress": 3.4747143957195134e-16,
+   "tsai_wu": 0.0,
+   "buckling": 0.0
+  },
+  "e_clt": 6.385190387639536e-15
+ },
+ "C2|t0183|24": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 2.771217243015035,
+   "tsai_wu": 3.0896735736463157,
+   "buckling": Infinity
+  },
+  "rf_python": {
+   "max_stress": 2.771217243015035,
+   "tsai_wu": 3.0896735736463157,
+   "buckling": Infinity
+  },
+  "e_rf": {
+   "max_stress": 0.0,
+   "tsai_wu": 0.0,
+   "buckling": 0.0
+  },
+  "e_clt": 4.768837243621986e-15
+ },
+ "C3|t0125|24": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 157.82436653260476,
+   "tsai_wu": 138.69738860889134,
+   "buckling": 3.007252865412138
+  },
+  "rf_python": {
+   "max_stress": 157.82436653260484,
+   "tsai_wu": 138.6973886088914,
+   "buckling": 3.0072528654121404
+  },
+  "e_rf": {
+   "max_stress": 5.40253258508072e-16,
+   "tsai_wu": 4.098377008459697e-16,
+   "buckling": 7.383635991468264e-16
+  },
+  "e_clt": 4.106724505579167e-15
+ },
+ "C3|t0183|16": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 132.8991713174869,
+   "tsai_wu": 108.61484114641725,
+   "buckling": 2.816306564112114
+  },
+  "rf_python": {
+   "max_stress": 132.89917131748692,
+   "tsai_wu": 108.61484114641735,
+   "buckling": 2.816306564112114
+  },
+  "e_rf": {
+   "max_stress": 2.1385919226318212e-16,
+   "tsai_wu": 9.15859950228315e-16,
+   "buckling": 0.0
+  },
+  "e_clt": 1.037444905900386e-15
+ },
+ "C4|t0125|24": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 201.3992187876601,
+   "tsai_wu": 296.4055729416284,
+   "buckling": 2.004835243608092
+  },
+  "rf_python": {
+   "max_stress": 201.3992187876601,
+   "tsai_wu": 296.4055729416284,
+   "buckling": 2.0048352436080936
+  },
+  "e_rf": {
+   "max_stress": 0.0,
+   "tsai_wu": 0.0,
+   "buckling": 8.860363189761918e-16
+  },
+  "e_clt": 1.4086535566547114e-15
+ },
+ "C4|t0183|24": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 294.6551130550979,
+   "tsai_wu": 433.6532094365194,
+   "buckling": 6.2783755262283805
+  },
+  "rf_python": {
+   "max_stress": 294.6551130550981,
+   "tsai_wu": 433.65320943651994,
+   "buckling": 6.278375526228375
+  },
+  "e_rf": {
+   "max_stress": 7.716603763828635e-16,
+   "tsai_wu": 1.3108036012155718e-15,
+   "buckling": 8.487976700243818e-16
+  },
+  "e_clt": 1.6612217112831551e-15
+ },
+ "C5|t0125|56": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 15.262226889736985,
+   "tsai_wu": 9.311983306752273,
+   "buckling": 2.9054093136515036
+  },
+  "rf_python": {
+   "max_stress": 15.26222688973698,
+   "tsai_wu": 9.31198330675226,
+   "buckling": 2.905409313651504
+  },
+  "e_rf": {
+   "max_stress": 3.4916729758383166e-16,
+   "tsai_wu": 1.3353221828464075e-15,
+   "buckling": 1.5284910382968848e-16
+  },
+  "e_clt": 1.4621383998667013e-15
+ },
+ "C5|t0183|40": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 16.199064631826044,
+   "tsai_wu": 9.88357862364113,
+   "buckling": 3.3186356028055304
+  },
+  "rf_python": {
+   "max_stress": 16.19906463182604,
+   "tsai_wu": 9.88357862364112,
+   "buckling": 3.3186356028055273
+  },
+  "e_rf": {
+   "max_stress": 2.1931597654228388e-16,
+   "tsai_wu": 1.078368619530951e-15,
+   "buckling": 9.36717627666758e-16
+  },
+  "e_clt": 2.0232646348099847e-15
+ },
+ "C6|t0125|32": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 1.882896788222764,
+   "tsai_wu": 1.6032952133254108,
+   "buckling": 10.06015970223734
+  },
+  "rf_python": {
+   "max_stress": 1.882896788222761,
+   "tsai_wu": 1.6032952133254084,
+   "buckling": 10.060159702237787
+  },
+  "e_rf": {
+   "max_stress": 1.6509797501352258e-15,
+   "tsai_wu": 1.5234191644028861e-15,
+   "buckling": 4.431992929399561e-14
+  },
+  "e_clt": 7.316523785471845e-15
+ },
+ "C6|t0183|24": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 1.8755273470352638,
+   "tsai_wu": 1.6165824846709624,
+   "buckling": 13.470243292550318
+  },
+  "rf_python": {
+   "max_stress": 1.875527347035266,
+   "tsai_wu": 1.6165824846709638,
+   "buckling": 13.470243292550292
+  },
+  "e_rf": {
+   "max_stress": 1.183904917601057e-15,
+   "tsai_wu": 8.2412598316711085e-16,
+   "buckling": 1.9780899284677286e-15
+  },
+  "e_clt": 5.413859474380984e-15
+ },
+ "C7|t0125|24": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 157.82436653260473,
+   "tsai_wu": 126.84805149681235,
+   "buckling": 2.879844382496411
+  },
+  "rf_python": {
+   "max_stress": 157.82436653260476,
+   "tsai_wu": 126.84805149681237,
+   "buckling": 2.879844382496413
+  },
+  "e_rf": {
+   "max_stress": 1.800844195026907e-16,
+   "tsai_wu": 2.2406106436028493e-16,
+   "buckling": 7.710298732619384e-16
+  },
+  "e_clt": 4.243615322431806e-15
+ },
+ "C7|t0183|16": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 132.8991713174869,
+   "tsai_wu": 103.24466933057863,
+   "buckling": 2.690165815424781
+  },
+  "rf_python": {
+   "max_stress": 132.89917131748692,
+   "tsai_wu": 103.24466933057873,
+   "buckling": 2.690165815424777
+  },
+  "e_rf": {
+   "max_stress": 2.1385919226318212e-16,
+   "tsai_wu": 9.634975214836742e-16,
+   "buckling": 1.485708749153614e-15
+  },
+  "e_clt": 1.15271656211154e-15
+ },
+ "C8|t0183|64": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 1.5115652594446327,
+   "tsai_wu": 1.5769304881480561,
+   "buckling": Infinity
+  },
+  "rf_python": {
+   "max_stress": 1.5115652594446294,
+   "tsai_wu": 1.5769304881480528,
+   "buckling": Infinity
+  },
+  "e_rf": {
+   "max_stress": 2.2034570145513912e-15,
+   "tsai_wu": 2.112121681271443e-15,
+   "buckling": 0.0
+  },
+  "e_clt": 2.1816269205366085e-15
+ },
+ "C1|t0125|48|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 3.7934129416200912,
+   "tsai_wu": 3.4335310835613924,
+   "buckling": Infinity
+  },
+  "rf_python": {
+   "max_stress": 3.7934129416200872,
+   "tsai_wu": 3.4335310835613893,
+   "buckling": Infinity
+  },
+  "e_rf": {
+   "max_stress": 1.0536166112576208e-15,
+   "tsai_wu": 9.053724557303415e-16,
+   "buckling": 0.0
+  },
+  "e_clt": 2.1590724317614512e-15
+ },
+ "C1|t0183|32|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 3.8190665094795473,
+   "tsai_wu": 3.5111554238659233,
+   "buckling": Infinity
+  },
+  "rf_python": {
+   "max_stress": 3.819066509479544,
+   "tsai_wu": 3.5111554238659206,
+   "buckling": Infinity
+  },
+  "e_rf": {
+   "max_stress": 8.139749494370743e-16,
+   "tsai_wu": 7.588770468516074e-16,
+   "buckling": 0.0
+  },
+  "e_clt": 2.746581074516003e-15
+ },
+ "C2|t0125|32|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 2.556119204485606,
+   "tsai_wu": 2.8334961947038977,
+   "buckling": Infinity
+  },
+  "rf_python": {
+   "max_stress": 2.556119204485604,
+   "tsai_wu": 2.8334961947038955,
+   "buckling": Infinity
+  },
+  "e_rf": {
+   "max_stress": 8.68678598929879e-16,
+   "tsai_wu": 7.83641796802325e-16,
+   "buckling": 0.0
+  },
+  "e_clt": 3.547327993133073e-15
+ },
+ "C2|t0183|24|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 2.771217243015032,
+   "tsai_wu": 3.0896735736463135,
+   "buckling": Infinity
+  },
+  "rf_python": {
+   "max_stress": 2.7712172430150326,
+   "tsai_wu": 3.0896735736463135,
+   "buckling": Infinity
+  },
+  "e_rf": {
+   "max_stress": 1.6025059419986211e-16,
+   "tsai_wu": 0.0,
+   "buckling": 0.0
+  },
+  "e_clt": 2.8690698828752117e-15
+ },
+ "C3|t0125|24|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 157.82436653260476,
+   "tsai_wu": 138.69738860889134,
+   "buckling": 3.007252865412138
+  },
+  "rf_python": {
+   "max_stress": 157.82436653260484,
+   "tsai_wu": 138.6973886088914,
+   "buckling": 3.0072528654121404
+  },
+  "e_rf": {
+   "max_stress": 5.40253258508072e-16,
+   "tsai_wu": 4.098377008459697e-16,
+   "buckling": 7.383635991468264e-16
+  },
+  "e_clt": 4.106724505579167e-15
+ },
+ "C3|t0183|16|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 132.8991713174869,
+   "tsai_wu": 108.61484114641725,
+   "buckling": 2.816306564112114
+  },
+  "rf_python": {
+   "max_stress": 132.89917131748692,
+   "tsai_wu": 108.61484114641735,
+   "buckling": 2.816306564112114
+  },
+  "e_rf": {
+   "max_stress": 2.1385919226318212e-16,
+   "tsai_wu": 9.15859950228315e-16,
+   "buckling": 0.0
+  },
+  "e_clt": 1.037444905900386e-15
+ },
+ "C4|t0125|24|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 201.3992187876601,
+   "tsai_wu": 296.4055729416284,
+   "buckling": 2.004835243608092
+  },
+  "rf_python": {
+   "max_stress": 201.3992187876601,
+   "tsai_wu": 296.4055729416284,
+   "buckling": 2.0048352436080936
+  },
+  "e_rf": {
+   "max_stress": 0.0,
+   "tsai_wu": 0.0,
+   "buckling": 8.860363189761918e-16
+  },
+  "e_clt": 1.4086535566547114e-15
+ },
+ "C4|t0183|24|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 294.6551130550979,
+   "tsai_wu": 433.6532094365194,
+   "buckling": 6.2783755262283805
+  },
+  "rf_python": {
+   "max_stress": 294.6551130550981,
+   "tsai_wu": 433.65320943651994,
+   "buckling": 6.278375526228375
+  },
+  "e_rf": {
+   "max_stress": 7.716603763828635e-16,
+   "tsai_wu": 1.3108036012155718e-15,
+   "buckling": 8.487976700243818e-16
+  },
+  "e_clt": 1.6612217112831551e-15
+ },
+ "C5|t0125|56|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 15.262226889736976,
+   "tsai_wu": 9.311983306752271,
+   "buckling": 2.4050366687330205
+  },
+  "rf_python": {
+   "max_stress": 15.262226889736944,
+   "tsai_wu": 9.311983306752253,
+   "buckling": 2.405036668733022
+  },
+  "e_rf": {
+   "max_stress": 2.095003785502991e-15,
+   "tsai_wu": 1.907603118352011e-15,
+   "buckling": 5.539489883337329e-16
+  },
+  "e_clt": 2.1180594625048977e-15
+ },
+ "C5|t0183|40|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 16.199064631826026,
+   "tsai_wu": 9.883578623641124,
+   "buckling": 2.7273400250565465
+  },
+  "rf_python": {
+   "max_stress": 16.199064631826,
+   "tsai_wu": 9.883578623641109,
+   "buckling": 2.7273400250565456
+  },
+  "e_rf": {
+   "max_stress": 1.5352118357959889e-15,
+   "tsai_wu": 1.6175529292964275e-15,
+   "buckling": 3.256573846826123e-16
+  },
+  "e_clt": 3.372107724683304e-15
+ },
+ "C6|t0125|32|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 3.1998643312180257,
+   "tsai_wu": 2.3210377858890126,
+   "buckling": 6.36601319450085
+  },
+  "rf_python": {
+   "max_stress": 3.199864331218022,
+   "tsai_wu": 2.3210377858890108,
+   "buckling": 6.366013194500813
+  },
+  "e_rf": {
+   "max_stress": 1.1102700961850353e-15,
+   "tsai_wu": 7.653287034790188e-16,
+   "buckling": 5.720270143197592e-15
+  },
+  "e_clt": 3.1973067505755277e-15
+ },
+ "C6|t0183|24|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 3.2091919144235814,
+   "tsai_wu": 2.4235585392711743,
+   "buckling": 8.881398429311314
+  },
+  "rf_python": {
+   "max_stress": 3.2091919144235854,
+   "tsai_wu": 2.4235585392711765,
+   "buckling": 8.881398429311266
+  },
+  "e_rf": {
+   "max_stress": 1.245423457128599e-15,
+   "tsai_wu": 9.161924555443408e-16,
+   "buckling": 5.400234551522741e-15
+  },
+  "e_clt": 3.206626878450551e-15
+ },
+ "C7|t0125|24|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 157.82436653260473,
+   "tsai_wu": 126.84805149681235,
+   "buckling": 2.879844382496411
+  },
+  "rf_python": {
+   "max_stress": 157.82436653260476,
+   "tsai_wu": 126.84805149681237,
+   "buckling": 2.879844382496413
+  },
+  "e_rf": {
+   "max_stress": 1.800844195026907e-16,
+   "tsai_wu": 2.2406106436028493e-16,
+   "buckling": 7.710298732619384e-16
+  },
+  "e_clt": 4.243615322431806e-15
+ },
+ "C7|t0183|16|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 132.8991713174869,
+   "tsai_wu": 103.24466933057863,
+   "buckling": 2.690165815424781
+  },
+  "rf_python": {
+   "max_stress": 132.89917131748692,
+   "tsai_wu": 103.24466933057873,
+   "buckling": 2.690165815424777
+  },
+  "e_rf": {
+   "max_stress": 2.1385919226318212e-16,
+   "tsai_wu": 9.634975214836742e-16,
+   "buckling": 1.485708749153614e-15
+  },
+  "e_clt": 1.15271656211154e-15
+ },
+ "C8|t0183|64|max_margin": {
+  "pass": true,
+  "rf_matlab": {
+   "max_stress": 1.5255176885550439,
+   "tsai_wu": 1.5596561468339938,
+   "buckling": Infinity
+  },
+  "rf_python": {
+   "max_stress": 1.5255176885550406,
+   "tsai_wu": 1.55965614683399,
+   "buckling": Infinity
+  },
+  "e_rf": {
+   "max_stress": 2.183304132664793e-15,
+   "tsai_wu": 2.420250316961248e-15,
+   "buckling": 0.0
+  },
+  "e_clt": 2.5320688760871386e-15
+ }
+}

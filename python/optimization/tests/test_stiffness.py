@@ -223,7 +223,9 @@ def test_ga_local_search_reaches_proven_optimum(im7):
     target = st.make_key(ex["kind"], p.safety_factor, ex["rf_strength"], ex["lam"], ex["c"], ex["half"])
     r = optimize(None, problem=p, objective="max_stiffness", method="ga", seed=0, target=target,
                  ga_config=GAConfig(budget=3000, local_search=True))
-    assert r.stiffness["lambda"] == pytest.approx(ex["lam"], rel=1e-9) and r.hit_evals is not None
+    # the GA optimises the 8 x 8 model: its value is lambda_8x8; "lambda" is the reported 16 x 16 value (step 2)
+    assert r.stiffness["lambda_8x8"] == pytest.approx(ex["lam"], rel=1e-9) and r.hit_evals is not None
+    assert r.stiffness["lambda"] == analyze_design(p, full_laminate(np.array([r.stiffness["half"]]), True)[0])["lambda"]
     assert r.stiffness["proven"] is False
 
 
@@ -239,3 +241,140 @@ def test_incomplete_search_is_never_proven(im7):
     assert full["complete"] and r["lam"] <= full["lam"] * (1 + 1e-9) <= r["upper_bound"] * (1 + 2e-9)
     s = st.stiffness_search(p, time_limit=0.0, budget=1500)
     assert s["proven"] is False and s["status"] in ("best found", "no feasible design found")
+
+
+# ------------------------------------------------------------------------------------------------ step 2
+def test_min_plies_fallback_for_the_default_ply_count(im7):
+    """No QI laminate up to 64 plies meets the constraints for C8: N = fewest plies of the objective min_plies
+    (count-level scan, proven: the load cannot buckle the plate); none for t = 0.125 mm -> NoFeasiblePlyCount."""
+    p = _p(im7, (4e6, 2e6, 1e6), t=0.18288e-3)
+    assert not st.default_ply_count(p)["found"]
+    m = st.min_plies_count(p)
+    assert m["found"] and m["n"] == 64 and m["proven"]
+    assert m["scan"][-1]["max_strength_margin"] >= 1.5 > m["scan"][-2]["max_strength_margin"]
+    q, info = st.resolve_ply_count(p, None)
+    assert q.rules.n_min == q.rules.n_max == 64 and info["source"] == "min_plies fallback" and info["n_proven"]
+    assert not st.min_plies_count(_p(im7, (4e6, 2e6, 1e6)))["found"]
+    # the count-level scan gives the same ply count as the exact fewest-plies search of the API
+    for loads, t in (((1e6, 5e5, 0), 0.18288e-3), ((1.5e6, 0, 0), 0.125e-3)):
+        pp = _p(im7, loads, t=t)
+        ref = optimize(None, problem=pp, objective="min_plies", method="exhaustive")
+        assert st.min_plies_count(pp)["n"] == ref.n_plies and ref.status == "optimal"
+    assert st.resolve_ply_count(_p(im7, (-1e4, 0, 0)), None)[1]["source"] == "QI_ks"
+
+
+def test_arrangement_dp_matches_enumeration(im7, rng):
+    """Exact DP over the arrangements of a count tuple = enumeration of every valid arrangement: largest weighted sum,
+    number of arrangements, lexicographically smallest arrangement above a threshold."""
+    from optimization.rules import check_rules
+    p = _p(im7, (1e6, 0, 0), 16)
+    for counts in [(4, 1, 1, 2), (5, 1, 1, 1), (0, 3, 3, 2), (2, 2, 2, 2), (3, 2, 2, 1)]:
+        ms = np.repeat(np.arange(4), counts)
+        valid = sorted({tuple(x) for x in itertools.permutations(ms)
+                        if check_rules(full_laminate(np.array([x]), True)[0], p.rules)["contiguity"]})
+        vals, w = rng.random(4), np.sort(rng.random(8))[::-1]
+        dp = st.ArrangementDP(p, counts, vals, w)
+        V = np.array([np.dot(w, vals[list(x)]) for x in valid])
+        assert dp.n_arrangements == len(valid) and dp.vmax == pytest.approx(V.max(), rel=1e-13)
+        for thr in (V.max(), np.median(V), V.min()):
+            low = thr * (1 - 1e-12)
+            best = min(x for x, v in zip(valid, V) if v >= low)
+            assert tuple(dp.lex_smallest(low).tolist()) == best
+
+
+@pytest.mark.parametrize("loads", [(1.5e6, 0, 0), (1e6, 5e5, 0), (4e6, 2e6, 1e6), (2e5, 1e6, 0)])
+@pytest.mark.parametrize("n, t", [(12, 0.18288e-3), (16, 0.125e-3), (16, 0.18288e-3)])
+def test_compliance_tie_break_equals_enumeration(im7, loads, n, t):
+    """Compliance objective: c and the strength margin depend on the ply counts only (no difference at all within a
+    count tuple over every valid design); ties broken by the bending stiffness of the main load direction (D11 for
+    Nx, D22 for Ny, D66 for Nxy), then the sequence: the exact search equals the enumeration of every valid design."""
+    p = _p(im7, loads, n, t=t)
+    assert st.objective_kind(p) == "compliance"
+    ex = st.exact_stiffness(p)
+    bf = st.brute_force_merge(p, [st.brute_force(p, top_k=5)])
+    assert bf["max_rel_spread_c_in_counts"] == 0.0 and bf["max_rel_spread_rs_in_counts"] == 0.0
+    assert ex["half"] == bf["half"] and ex["status"] == bf["status"]
+    d = int(np.argmax(np.abs(loads)))
+    assert ex["direction"] == ("D11", "D22", "D66")[d]
+    assert ex["ddir"] == pytest.approx(bf["ddir"], rel=1e-12)
+    assert st.evaluate_half(p, ex["half"])["D"][d, d] == pytest.approx(ex["ddir"], rel=1e-12)
+
+
+def test_order_with_bending_stiffness_tie_break():
+    sf = 1.5
+    # compliance: equal c and strength margin -> larger D of the main direction wins before the sequence
+    rs, lam, c = [2.0, 2.0, 2.0], [np.inf] * 3, [10.0, 10.0 * (1 + 3e-10), 10.0]
+    H = [[0, 1], [1, 0], [2, 2]]
+    assert st.select(rs, lam, c, H, "compliance", sf, ddir=[5.0, 6.0, 6.0 * (1 - 4e-10)]) == 1
+    assert st.select(rs, lam, c, H, "compliance", sf) == 0                 # without D: the sequence decides
+    ka = st.make_key("compliance", sf, 2.0, np.inf, 10.0, [0, 1], 5.0)
+    kb = st.make_key("compliance", sf, 2.0, np.inf, 10.0, [1, 0], 6.0)
+    assert st.key_better(kb, ka) and not st.key_better(ka, kb)
+    kl = st.make_key("lambda", sf, 2.0, 3.0, 10.0, [1, 0], 6.0)            # lambda objective: D is not used
+    assert kl.tertiary == 0.0
+    res = {"rf_strength": np.array(rs), "lam": np.array(lam), "c": np.array([10.0, 10.0, 10.0]),
+           "ddir": np.array([5.0, 7.0, 6.0])}
+    assert list(st.rank_order(res, sf, "compliance")) == [1, 2, 0]
+
+
+def test_reported_lambda_is_the_same_everywhere(im7):
+    """The buckling factor reported for a design (16 x 16 sine series) is the same number in analyze_design and in
+    the result record (stiffness_record, i.e. the results file); the 8 x 8 value and the polynomial check are next
+    to it. Objectives of the fewest-plies study keep their values (rf['buckling'], margin, max_margin 'lambda')."""
+    p = _p(im7, (-1e4, 0, 5e3), 24)
+    r = optimize(None, problem=p, objective="max_stiffness", method="exhaustive")
+    s = r.stiffness
+    full = full_laminate(np.array([s["half"]]), True)[0]
+    det = analyze_design(p, full)
+    assert s["lambda"] == det["lambda"] == det["lambda_16x16"] == r.rf["buckling"]
+    assert s["lambda_16x16"] == s["lambda"] and s["lambda_8x8"] == pytest.approx(det["lambda_8x8"], rel=1e-12)
+    assert s["lambda"] <= s["lambda_8x8"] * (1 + 1e-12)                    # nested bases: 16 x 16 <= 8 x 8
+    assert abs(s["lambda_poly16"] / s["lambda"] - 1) < 0.01
+    qfull = full_laminate(st.qi_half(24)[None], True)[0]
+    assert s["qi"]["lambda"] == analyze_design(p, qfull)["lambda"]
+    # the rule of the fewest-plies study is unchanged unless report_lambda: min(optimisation terms, converged)
+    legacy = analyze_design(p, full, report_lambda=False)
+    by = legacy["by_shear_sign"]
+    ref = min(min(v["buckling_ritz_full"]["lambda_converged"], v["buckling_ritz_full"]["lambda_optimization_terms"])
+              for v in by.values())
+    assert legacy["rf"]["buckling"] == ref
+    mm = optimize(None, problem=p, objective="max_margin", method="exhaustive")
+    mfull = full_laminate(np.array([mm.stiffness["half"]]), True)[0]
+    assert mm.objective == "max_margin" and mm.stiffness["lambda"] == mm.stiffness["lambda_8x8"]
+    assert mm.rf["buckling"] == analyze_design(p, mfull)["rf"]["buckling"]
+
+
+def test_top_k_rule_and_16x16_choice(im7):
+    """k = 1 at the start: the gap of the list is 0 < the 8x8-16x16 difference, so k is doubled until the rule
+    holds; the design returned is the best of ALL valid designs by the 16 x 16 value (enumeration, 12 plies)."""
+    p = _p(im7, (-6e3, 0, 4e3), 12, t=0.125e-3)
+    r = st.solve_max_stiffness(p, k_start=1)
+    hist = r["k_history"]
+    assert len(hist) >= 2 and hist[0]["k"] == 1 and r["k_rule_met"]
+    assert hist[-1]["gap"] >= hist[-1]["e_max"] - 1e-9 or hist[-1]["all_designs_listed"]
+    bf = st.brute_force(p, top_k=10 ** 6)
+    ok = bf["rs"] >= p.safety_factor
+    H = bf["halves"][ok]
+    lam16 = st.report_lambdas(p, H)
+    i = st.select(bf["rs"][ok], lam16, np.zeros(len(H)), H, "lambda", p.safety_factor)
+    assert r["half"] == H[i].tolist() and r["lam16"] == pytest.approx(lam16[i], rel=1e-12)
+    assert np.all(lam16 <= bf["lam"][ok] * (1 + 1e-12))
+    assert r["proven_16x16"] and r["proven_in"] == st.PROVEN_IN
+
+
+def test_incomplete_branch_is_reported_and_never_proven(im7):
+    """Forced INCOMPLETE (node limit, tiny blocks): best design found, open bound, gap, status 'incomplete', never
+    proven, the label says INCOMPLETE with the gap; the record and the label of a complete run differ."""
+    p = _p(im7, (-1e4, 0, 5e3), 24)
+    r = st.solve_max_stiffness(p, max_nodes=50)
+    assert r["status"] == "incomplete" and not r["proven"] and not r["complete"] and r["proven_in"] is None
+    assert r["upper_bound"] >= r["lam"] and r["gap"] > 0 and r["k_history"] == []
+    ex = st.exact_stiffness(p, block=1, max_nodes=10)
+    assert ex["status"] == "incomplete" and not ex["proven"]
+    label = st.status_text(r["status"], r["proven"], r["gap"])
+    assert label.startswith("INCOMPLETE") and "gap" in label and "proven optimum" not in label
+    rec = st.stiffness_record(p, r["half"], status=r["status"], proven=r["proven"], runtime_s=0.0)
+    assert rec["result"] == "incomplete (not proven)" and rec["proven_in"] is None
+    full = st.solve_max_stiffness(p)
+    assert full["complete"] and r["lam"] <= full["lam_8x8_best"] * (1 + 1e-9) <= r["upper_bound"] * (1 + 2e-9)
+    assert st.status_text(full["status"], full["proven"]).startswith("proven optimum")

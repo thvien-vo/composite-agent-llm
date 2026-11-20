@@ -15,8 +15,9 @@ objective: "min_plies" (default, fewest plies: the behaviour above), "max_margin
 fixed ply count) or "max_stiffness" (fixed ply count, stiffest laminate: largest buckling factor, or smallest
 in-plane compliance when the load cannot buckle the plate; see stiffness.py). fixed_plies = N fixes the ply count
 of the last two; max_stiffness without it uses the smallest quasi-isotropic laminate [0/45/-45/90]_ks that meets the
-constraints (stiffness.default_ply_count). For max_stiffness the exact search may stop at the time limit: status
-"incomplete" with the gap to the open bound, never "optimal".
+constraints, else the fewest plies of the objective min_plies (stiffness.resolve_ply_count). For max_stiffness the
+exact search may stop at the time limit: status "incomplete" with the gap to the open bound, never "optimal"; it is
+proven in the 8x8 Ritz model and the buckling factor reported is the 16 x 16 value (stiffness.solve_max_stiffness).
 """
 from __future__ import annotations
 
@@ -146,9 +147,11 @@ def warnings_for(problem: Problem) -> List[str]:
 
 
 def result_from_design(problem: Problem, full: Sequence[int], method: str, seed: Optional[int], status: str,
-                       n_eval: int, n_calls: int, runtime: float, verify_matlab: bool = False, **extra
-                       ) -> OptimizationResult:
-    det = analyze_design(problem, full)
+                       n_eval: int, n_calls: int, runtime: float, verify_matlab: bool = False,
+                       report_lambda: bool = False, **extra) -> OptimizationResult:
+    """report_lambda: rf["buckling"] and the margin use the reported 16 x 16 buckling factor (objective
+    max_stiffness; see evaluate.analyze_design); False keeps the rule of the fewest-plies study."""
+    det = analyze_design(problem, full, report_lambda=report_lambda)
     chk = check_rules(full, problem.rules)
     feasible = det["margin"] >= problem.safety_factor
     warns = warnings_for(problem)
@@ -253,7 +256,7 @@ def _optimize_fixed(p: Problem, objective: str, fixed_plies: Optional[int], meth
                     target, verbose: bool, t0: float) -> OptimizationResult:
     """optimize() for the fixed-ply-count objectives "max_margin" and "max_stiffness"."""
     from dataclasses import replace as _replace
-    from .stiffness import exact_stiffness, fixed_problem, resolve_ply_count, stiffness_record
+    from .stiffness import fixed_problem, resolve_ply_count, solve_max_stiffness, stiffness_record
     sf = p.safety_factor
     if objective == "max_stiffness":
         p, n_info = resolve_ply_count(p, fixed_plies)
@@ -266,11 +269,14 @@ def _optimize_fixed(p: Problem, objective: str, fixed_plies: Optional[int], meth
     extra, kw = {"ply_count": n_info}, {}
     if method == "exhaustive":
         if objective == "max_stiffness":
-            r = exact_stiffness(p, time_limit=time_limit, verbose=verbose)
+            r = solve_max_stiffness(p, time_limit=time_limit, verbose=verbose)
             full, status, proven = r["full"], r["status"], r["proven"]
             n_eval = r.get("n_eigen", r["n_count_tuples"])
             extra.update(gap=r.get("gap"), upper_bound=r.get("upper_bound"), exact_method=r["method"],
-                         max_rf_strength=r["max_rf_strength"], infeasible_reason=r["infeasible_reason"])
+                         max_rf_strength=r["max_rf_strength"], infeasible_reason=r["infeasible_reason"],
+                         k_final=r.get("k_final"), k_rule_met=r.get("k_rule_met"),
+                         k_cap_reached=r.get("k_cap_reached"), best_differs_8x8_16x16=r.get("best_differs"),
+                         design_8x8_best=r.get("half_8x8"), lambda_8x8_best=r.get("lam_8x8_best"))
         else:
             if not ("buckling" in p.criteria and p.has_compression) and p.rules.symmetric:
                 ex = strength_only_exact(p)
@@ -303,7 +309,7 @@ def _optimize_fixed(p: Problem, objective: str, fixed_plies: Optional[int], meth
     rec = stiffness_record(p, full[:len(full) // 2], status=status, proven=proven, runtime_s=runtime,
                            objective=objective, **extra)
     return result_from_design(p, full, method, run_seed, status, n_eval, n_calls, runtime, verify_matlab,
-                              objective=objective, stiffness=rec, **kw)
+                              report_lambda=objective == "max_stiffness", objective=objective, stiffness=rec, **kw)
 
 
 def quasi_isotropic(problem: Problem, n_max: int = 128, n_min: int = 8) -> Dict:

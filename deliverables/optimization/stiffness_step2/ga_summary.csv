@@ -1,0 +1,31 @@
+case,thickness,t (mm),N,method,runs,exact result,target,reach optimum (full budget),"same values (objective, margin, D)",same sequence as exact 8x8 best,hit within 1000 evals,hit within 2000 evals,median evals to hit,feasible,evals mean,time mean (s)
+C1,t0125,0.125,48,ga,20,"proven optimum (proven, exact count-level search)",optimum of the 8x8 model,20,7,2,20,20,320.0,20,10009.15,2.1831884299986997
+C1,t0125,0.125,48,ga_ls,20,"proven optimum (proven, exact count-level search)",optimum of the 8x8 model,20,16,16,0,0,2623.0,20,10014.25,1.9185171600001922
+C1,t0183,0.18288,32,ga,20,"proven optimum (proven, exact count-level search)",optimum of the 8x8 model,20,20,18,20,20,264.5,20,10011.8,1.965421300000162
+C1,t0183,0.18288,32,ga_ls,20,"proven optimum (proven, exact count-level search)",optimum of the 8x8 model,20,20,20,19,20,829.5,20,10012.3,1.9174675949987432
+C2,t0125,0.125,32,ga,20,"proven optimum (proven, exact count-level search)",optimum of the 8x8 model,20,9,9,20,20,196.0,20,10012.45,1.7863323050012696
+C2,t0125,0.125,32,ga_ls,20,"proven optimum (proven, exact count-level search)",optimum of the 8x8 model,20,19,19,13,20,938.0,20,10014.15,1.7463029700003971
+C2,t0183,0.18288,24,ga,20,"proven optimum (proven, exact count-level search)",optimum of the 8x8 model,20,20,18,20,20,86.0,20,10013.25,1.7748609749993194
+C2,t0183,0.18288,24,ga_ls,20,"proven optimum (proven, exact count-level search)",optimum of the 8x8 model,20,20,20,20,20,424.0,20,10010.95,1.7800418649982022
+C3,t0125,0.125,24,ga,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,16,16,4,2,5,3316.0,20,10011.0,3.065992019999976
+C3,t0125,0.125,24,ga_ls,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,19,19,7,12,14,435.0,20,10011.4,3.193647344999772
+C3,t0183,0.18288,16,ga,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,20,20,20,16,20,668.0,20,9921.5,67.74803541000001
+C3,t0183,0.18288,16,ga_ls,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,20,20,20,20,20,125.5,20,9900.1,36.9588866850012
+C4,t0125,0.125,24,ga,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,18,18,2,2,5,4025.0,20,10014.0,5.595781825000449
+C4,t0125,0.125,24,ga_ls,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,20,20,11,12,14,459.0,20,10014.7,6.491565114999252
+C4,t0183,0.18288,24,ga,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,16,16,3,2,5,3651.5,20,10013.6,3.689475639999955
+C4,t0183,0.18288,24,ga_ls,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,20,20,11,13,14,433.5,20,10013.5,3.2812642400000187
+C5,t0125,0.125,56,ga,20,"INCOMPLETE (not proven, gap 0.455 % in the 8x8 model)",best known (not proven),0,0,0,0,0,,20,10016.7,5.026840060000017
+C5,t0125,0.125,56,ga_ls,20,"INCOMPLETE (not proven, gap 0.455 % in the 8x8 model)",best known (not proven),5,5,0,0,0,8376.0,20,10046.2,4.817490435000036
+C5,t0183,0.18288,40,ga,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,2,2,0,0,0,5002.0,20,10010.6,4.693998640000063
+C5,t0183,0.18288,40,ga_ls,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,3,3,0,0,0,7782.0,20,10021.0,4.604961250000042
+C6,t0125,0.125,32,ga,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,4,4,1,0,0,7121.0,20,10015.4,4.059412289999978
+C6,t0125,0.125,32,ga_ls,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,18,18,10,7,14,1072.5,20,10013.85,4.042218634999995
+C6,t0183,0.18288,24,ga,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,17,17,6,2,2,2994.0,20,10013.35,4.268273279999994
+C6,t0183,0.18288,24,ga_ls,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,20,20,15,18,20,483.0,20,10010.65,8.579940004999958
+C7,t0125,0.125,24,ga,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,11,11,6,0,0,6175.0,20,10013.7,11.134514755000055
+C7,t0125,0.125,24,ga_ls,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,17,17,10,8,9,1723.0,20,10014.0,5.99874828500001
+C7,t0183,0.18288,16,ga,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,20,20,20,16,20,515.5,20,9931.95,34.882944550000026
+C7,t0183,0.18288,16,ga_ls,20,proven optimum (proven in the 8x8 Ritz model),optimum of the 8x8 model,20,20,20,20,20,123.5,20,9941.1,35.44538733000002
+C8,t0183,0.18288,64,ga,20,"proven optimum (proven, exact count-level search)",optimum of the 8x8 model,20,0,0,20,20,58.0,20,10015.2,3.2433361900000137
+C8,t0183,0.18288,64,ga_ls,20,"proven optimum (proven, exact count-level search)",optimum of the 8x8 model,20,17,13,0,0,7600.5,20,10056.6,3.8781843650000156

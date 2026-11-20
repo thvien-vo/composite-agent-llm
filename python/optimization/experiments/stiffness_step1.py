@@ -229,7 +229,8 @@ def task_ga(args) -> Dict:
     tkey = st.Key(*target[:4], tuple(target[4]))
     r = optimize(None, problem=p, objective="max_stiffness", method="ga", seed=seed, ga_config=cfg, target=tkey)
     s = r.stiffness
-    key = st.make_key(s["kind"], p.safety_factor, s["strength_margin"], s["lambda"], s["c_N_per_m"], s["half"])
+    key = st.make_key(s["kind"], p.safety_factor, s["strength_margin"], s.get("lambda_8x8", s["lambda"]),
+                      s["c_N_per_m"], s["half"])
     return {"case": cid, "thickness": tk, "N": n, "method": method, "seed": seed, "kind": s["kind"],
             "lambda": s["lambda"], "c_N_per_m": s["c_N_per_m"], "strength_margin": s["strength_margin"],
             "feasible": s["feasible"], "design": s["notation"], "reaches_optimum": st.reaches(key, tkey),
@@ -500,7 +501,8 @@ def run(a, pool, workers: int) -> None:
         items = []
         for cid, tk, n in GA_PROBLEMS:
             s = uniq[(cid, tk, n)]["max_stiffness"]
-            key = st.make_key(s["kind"], SAFETY_FACTOR, s["strength_margin"], s["lambda"], s["c_N_per_m"], s["half"])
+            key = st.make_key(s["kind"], SAFETY_FACTOR, s["strength_margin"], s.get("lambda_8x8", s["lambda"]),
+                              s["c_N_per_m"], s["half"])
             for method in ("ga", "ga_ls"):
                 for seed in range(a.seeds):
                     items.append((cid, tk, n, method, seed, a.budget, list(key[:4]) + [list(key[4])], s["half"]))

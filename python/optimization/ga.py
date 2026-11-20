@@ -27,8 +27,8 @@ Objective "max_stiffness" (fixed ply count, see stiffness.py): the ply count mus
 the ply addition / deletion operators are switched off and the local search uses swaps and single-ply changes only
 (never a change of the ply count). Ranking: feasible first (strength margin and buckling factor >= safety factor),
 then the objective (largest lambda, or smallest in-plane compliance c when the load cannot buckle the plate), then
-the strength margin; improvements and the final answer use the same order with the 1e-9 tie rule and the
-lexicographic tie-break of stiffness.py.
+the strength margin (compliance: then the bending stiffness of the main load direction); improvements and the final
+answer use the same order with the 1e-9 tie rule and the lexicographic tie-break of stiffness.py.
 """
 from __future__ import annotations
 
@@ -177,7 +177,7 @@ class GeneticAlgorithm:
         if self.stiff:
             from .stiffness import make_key
             return make_key(self.kind, self.p.safety_factor, float(res["rf_strength"][i]), float(res["lam"][i]),
-                            float(res["c"][i]), genes)
+                            float(res["c"][i]), genes, float(res["ddir"][i]))
         return (int(res["n_plies"][i]), float(res["margin"][i]))
 
     def _improves(self, a, b) -> bool:
@@ -273,7 +273,8 @@ class GeneticAlgorithm:
             if self.stiff:
                 history.append({"gen": gen, "evals": self.ev.n_unique, "n_plies": int(res["n_plies"][b]),
                                 "margin": float(res["margin"][b]), "feasible": best.feasible, "tier": best.tier,
-                                "objective": best.primary, "strength_margin": float(res["rf_strength"][b])})
+                                "objective": best.primary, "strength_margin": float(res["rf_strength"][b]),
+                                "half": list(best.lex)})
                 if target is not None and hit_at is None:
                     from .stiffness import reaches
                     if reaches(best, target):
@@ -316,7 +317,7 @@ class GeneticAlgorithm:
             res = self.ev.evaluate(pop)
         if self.stiff:      # final answer: the order of stiffness.py with the 1e-9 tie rule
             from .stiffness import select
-            b = select(res["rf_strength"], res["lam"], res["c"], pop, self.kind, sf)
+            b = select(res["rf_strength"], res["lam"], res["c"], pop, self.kind, sf, ddir=res["ddir"])
         else:
             order = _rank(res, sf, cfg.objective)
             b = order[0]
@@ -328,7 +329,7 @@ class GeneticAlgorithm:
                "time_s": time.perf_counter() - t0, "repair_stats": dict(self.repairer.stats)}
         if self.stiff:
             out.update(kind=self.kind, rf_strength=float(res["rf_strength"][b]), lam=float(res["lam"][b]),
-                       c=float(res["c"][b]), key=self._key(res, b, pop[b]))
+                       c=float(res["c"][b]), ddir=float(res["ddir"][b]), key=self._key(res, b, pop[b]))
         return out
 
 

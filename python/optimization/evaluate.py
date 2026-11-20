@@ -30,6 +30,14 @@ from .material import DEFAULT_PLY_THICKNESS, Material
 from .rules import ANGLES, EMPTY, ENCODINGS, Encoding, Rules, full_laminate
 
 CRITERION_NAMES = ("max_stress", "tsai_wu", "max_strain", "buckling")
+REPORT_TERMS = 16                   # sine-series size of the reported (converged) buckling factor, 16 x 16 terms
+DIRECTION_NAMES = ("D11", "D22", "D66")
+
+
+def main_load_direction(loads: Sequence[float]) -> int:
+    """Main load direction: index of the largest |Nx|, |Ny|, |Nxy| (the first one on equal magnitudes); its bending
+    stiffness D11, D22 or D66 (DIRECTION_NAMES) breaks the ties of the compliance objective (stiffness.py)."""
+    return int(np.argmax(np.abs(np.asarray(loads, dtype=float)[:3])))
 
 
 @dataclass(frozen=True)
@@ -111,9 +119,11 @@ class Evaluator:
 
     def __init__(self, problem: Problem, n_genes: Optional[int] = None, objective: Optional[str] = None):
         self.p = problem
-        # objective "max_stiffness": evaluate() also returns rf_strength, lam and c (cached with the design)
+        # objective "max_stiffness": evaluate() also returns rf_strength, lam, c and ddir (bending stiffness in the
+        # main load direction, D11 / D22 / D66, see main_load_direction), cached with the design
         self.objective = objective
         self.extra: Dict[bytes, Tuple] = {}
+        self.direction = main_load_direction(problem.loads)
         self.enc = problem.enc
         self.Q = clt.q_matrix(problem.material.E1, problem.material.E2, problem.material.G12, problem.material.nu12)
         self.Qb = clt.qbar(self.Q, ANGLES)                                   # (4, 3, 3)
@@ -156,7 +166,8 @@ class Evaluator:
             for j, i in enumerate(todo):
                 self.cache[keys[i]] = (res["n_plies"][j], res["margin"][j], res["rf"][j], res["crit"][j])
                 if stiff:
-                    self.extra[keys[i]] = (res["rf_strength"][j], res["lam"][j], res["c"][j])
+                    self.extra[keys[i]] = (res["rf_strength"][j], res["lam"][j], res["c"][j],
+                                           res["D"][j, self.direction, self.direction])
             self.n_unique += len(todo)
         n = np.array([self.cache[k][0] for k in keys])
         margin = np.array([self.cache[k][1] for k in keys])
@@ -165,8 +176,8 @@ class Evaluator:
         out = {"n_plies": n, "margin": margin, "rf": rf, "crit": crit,
                "feasible": margin >= self.p.safety_factor}
         if stiff:
-            ex = np.array([self.extra[k] for k in keys], dtype=float).reshape(len(keys), 3)
-            out.update(rf_strength=ex[:, 0], lam=ex[:, 1], c=ex[:, 2])
+            ex = np.array([self.extra[k] for k in keys], dtype=float).reshape(len(keys), 4)
+            out.update(rf_strength=ex[:, 0], lam=ex[:, 1], c=ex[:, 2], ddir=ex[:, 3])
         return out
 
     def compute_plies(self, plies: np.ndarray, details: bool = False) -> Dict[str, np.ndarray]:
@@ -315,30 +326,41 @@ class Evaluator:
 
 
 # ---------------------------------------------------------------------------------------------- details
-def analyze_design(problem: Problem, full: Sequence[int]) -> Dict:
+def analyze_design(problem: Problem, full: Sequence[int], report_lambda: bool = False) -> Dict:
     """Detailed analysis of one design (full laminate ply codes, ply 1 first) with the general CLT path:
     per-ply RFs, critical ply / criterion, buckling mode, D16/D11, D26/D22, Ritz check (with Nxy).
     With shear_both_signs the design is analysed for +Nxy and -Nxy: every RF is the smaller of the two, the details
-    (critical ply, mode...) are those of the governing direction, and "by_shear_sign" keeps both analyses."""
+    (critical ply, mode...) are those of the governing direction, and "by_shear_sign" keeps both analyses.
+
+    Buckling factor (ritz_full model): "lambda" is the REPORTED value, the converged Ritz double sine series with
+    REPORT_TERMS x REPORT_TERMS = 16 x 16 terms (smaller value over +Nxy / -Nxy), also given as "lambda_16x16";
+    "lambda_8x8" is the value with the optimisation terms (problem.ritz_terms). rf["buckling"] and the margin keep
+    the rule of the fewest-plies study (min of the optimisation terms and buckling.converge) unless report_lambda is
+    True (objective "max_stiffness"): then rf["buckling"] = lambda_16x16 and the margin, the governing criterion
+    and the critical ply follow from it."""
     if not problem.both_signs:
-        return _analyze_one(problem, full)
+        return _analyze_one(problem, full, report_lambda)
     Nx, Ny, Nxy = problem.loads
     one = replace(problem, shear_both_signs=False)
-    det = {"+": _analyze_one(one, full), "-": _analyze_one(replace(one, loads=(Nx, Ny, -Nxy)), full)}
+    det = {"+": _analyze_one(one, full, report_lambda),
+           "-": _analyze_one(replace(one, loads=(Nx, Ny, -Nxy)), full, report_lambda)}
     sign = "+" if det["+"]["margin"] <= det["-"]["margin"] else "-"
     out = dict(det[sign])
     out["rf"] = {c: min(det["+"]["rf"][c], det["-"]["rf"][c]) for c in det["+"]["rf"]}
     out["margin"] = min(det["+"]["margin"], det["-"]["margin"])
     out["strength_margin"] = min(det["+"]["strength_margin"], det["-"]["strength_margin"])
     out["compliance_c"] = max(det["+"]["compliance_c"], det["-"]["compliance_c"])
-    out["lambda"] = out["rf"].get("buckling")
+    for k in ("lambda_16x16", "lambda_8x8"):
+        out[k] = None if det["+"][k] is None else min(det["+"][k], det["-"][k])
+    out["lambda"] = out["lambda_16x16"]
     out["governing_shear_sign"] = sign
     out["by_shear_sign"] = {s: {k: d[k] for k in ("rf", "margin", "governing", "critical_ply", "critical_angle",
-                                                   "buckling_ritz_full")} for s, d in det.items()}
+                                                   "buckling_ritz_full", "lambda_16x16", "lambda_8x8")}
+                            for s, d in det.items()}
     return out
 
 
-def _analyze_one(problem: Problem, full: Sequence[int]) -> Dict:
+def _analyze_one(problem: Problem, full: Sequence[int], report_lambda: bool = False) -> Dict:
     f = np.asarray(full, dtype=int)
     ang = ANGLES[f]
     m = problem.material
@@ -360,20 +382,33 @@ def _analyze_one(problem: Problem, full: Sequence[int]) -> Dict:
                                                   problem.buckling_modes)
     lam_ritz = float(buckling.ritz([D[0, 0]], [D[0, 1]], [D[1, 1]], [D[2, 2]], Nx, Ny, Nxy, a, b, 20, 20)[0])
     full_model = None
+    lam16 = None
     if problem.buckling_model == "ritz_full":
         conv = buckling.converge(D, Nx, Ny, Nxy, a, b, start=6, step=2, tol=0.005)
         mn = buckling.terms_for(problem.ritz_terms, a, b)
         lam_opt = float(buckling.ritz_full(D, Nx, Ny, Nxy, a, b, *mn)[0])
+        mn16 = buckling.terms_for(REPORT_TERMS, a, b)
+        lam16 = float(buckling.ritz_full(D, Nx, Ny, Nxy, a, b, *mn16)[0])
         full_model = {"lambda_optimization_terms": lam_opt, "optimization_terms": mn,
                       "lambda_converged": conv["lambda"], "converged_terms": (conv["M"], conv["N"]),
-                      "converged": conv["converged"], "last_change": conv["last_change"], "sequence": conv["terms"]}
+                      "converged": conv["converged"], "last_change": conv["last_change"], "sequence": conv["terms"],
+                      "lambda_report_terms": lam16, "report_terms": mn16}
     rf = {c: float(np.min(v)) for c, v in per_ply.items()}
     crit_ply = {c: int(np.argmin(v)) + 1 for c, v in per_ply.items()}
+    lam_8x8 = None
     if "buckling" in problem.criteria:
         lam_used = lam_ritz if problem.buckling_model == "ritz" else float(lam_cf[0])
         if full_model is not None:   # the lower of the two upper bounds (optimisation terms, converged series)
             lam_used = min(full_model["lambda_converged"], full_model["lambda_optimization_terms"])
+            lam_8x8 = full_model["lambda_optimization_terms"] / problem.criterion_factors.get("buckling", 1.0)
+            lam16 = lam16 / problem.criterion_factors.get("buckling", 1.0)
+            if report_lambda:        # objective max_stiffness: the reported (16 x 16) value
+                lam_used = full_model["lambda_report_terms"]
         rf["buckling"] = float(lam_used) / problem.criterion_factors.get("buckling", 1.0)
+        if full_model is None:       # other buckling models: one value only
+            lam_8x8 = lam16 = rf["buckling"]
+    else:
+        lam16 = None
     governing = min(rf, key=lambda c: rf[c])
     margin = rf[governing]
     strength_rf = [v for c, v in rf.items() if c != "buckling"]
@@ -394,9 +429,11 @@ def _analyze_one(problem: Problem, full: Sequence[int]) -> Dict:
         "ABD": res["ABD"], "max_failure_index": res["max_failure_index"], "critical_ply_matlab_style": res["critical_ply"],
         "thickness_mm": float(len(f) * problem.ply_thickness * 1e3),
         # added for the fixed-thickness objectives (values above unchanged): A [N/m], D [N m], strength margin =
-        # min over the strength criteria, lambda = buckling RF used above, c = N . eps0 = N^T A^-1 N [N/m]
+        # min over the strength criteria, c = N . eps0 = N^T A^-1 N [N/m]; lambda = the reported buckling factor
+        # (Ritz sine series 16 x 16, = lambda_16x16), lambda_8x8 = with the optimisation terms
         "A": res["A"], "D": D, "strength_margin": float(min(strength_rf)) if strength_rf else float("inf"),
-        "lambda": rf.get("buckling"), "compliance_c": float(res["eps0"] @ np.array([Nx, Ny, Nxy], dtype=float)),
+        "lambda": lam16, "lambda_16x16": lam16, "lambda_8x8": lam_8x8,
+        "compliance_c": float(res["eps0"] @ np.array([Nx, Ny, Nxy], dtype=float)),
     }
 
 

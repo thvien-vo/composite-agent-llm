@@ -17,18 +17,36 @@ Objective, compared in this order:
          c = N^T a N,   a = A^-1,   N = (Nx, Ny, Nxy) [N/m],  A [N/m]   ->   c [N/m] (= J/m^2)
      c = N . eps0 is twice the membrane strain energy per unit area. With shear_both_signs the larger value over
      +Nxy / -Nxy is used (they are equal for balanced laminates, A16 = A26 = 0). c depends on the ply counts only;
-  3. two objective values within a relative 1e-9 are equal; then the larger strength margin wins (within 1e-9),
-     then the lexicographically smallest stacking sequence (ply codes 0 = 0 deg, 1 = +45, 2 = -45, 3 = 90, read
-     from ply 1 = outer surface to the mid-plane), so that the answer is unique.
+  3. two objective values within a relative 1e-9 are equal; then the larger strength margin wins (within 1e-9);
+     compliance objective only: then the larger bending stiffness in the main load direction (D11 for Nx, D22 for
+     Ny, D66 for Nxy: the largest of |Nx|, |Ny|, |Nxy|, evaluate.main_load_direction; within 1e-9); then the
+     lexicographically smallest stacking sequence (ply codes 0 = 0 deg, 1 = +45, 2 = -45, 3 = 90, read from ply 1 =
+     outer surface to the mid-plane), so that the answer is unique.
+     Why the bending stiffness: with in-plane loads only and a symmetric laminate (B = 0) the mid-plane strain is
+     uniform, eps0 = A^-1 N, and A depends on the ply counts only; the stress of a ply then depends on its angle only,
+     so c and the strength margin depend on the counts (n0, n+45, n-45, n90) only and every arrangement of a count
+     tuple ties on (1)-(2). The stacking order changes D only, so D decides.
 Problems with no feasible design follow the same order with the constraints relaxed step by step: among the
-designs meeting (a), the largest lambda (resp. the smallest c); if no design meets (a), the largest strength margin.
+designs meeting (a), the largest lambda (resp. the smallest c); if no design meets (a), the largest strength margin
+(compliance objective: then the bending stiffness in the main load direction, then the sequence).
 The status is then "infeasible".
 
-Default ply count (default_ply_count): the smallest quasi-isotropic laminate [0/45/-45/90]_ks (N = 8k,
-8 <= N <= 64) that meets (a) and (b) for the load case and the ply thickness; none -> no default (infeasible).
+Default ply count (resolve_ply_count): the smallest quasi-isotropic laminate [0/45/-45/90]_ks (N = 8k,
+8 <= N <= 64) that meets (a) and (b) for the load case and the ply thickness (default_ply_count, "QI_ks"); if there
+is none, the fewest plies (8-64) with which a design meets (a) and (b), i.e. the answer of the objective min_plies
+("min_plies fallback", min_plies_count; proven or not is recorded); if neither exists: infeasible, no N.
 
 Exact search (exact_stiffness): see the docstring of exact_stiffness for the bounds and why they are valid.
-"exact" means: the global optimum of the model that is optimised (Ritz series with problem.ritz_terms terms).
+"exact" means: the global optimum of the model that is optimised (Ritz series with problem.ritz_terms terms, 8 x 8
+in this project): results are "proven in the 8x8 Ritz model".
+
+Reported buckling factor (solve_max_stiffness, stiffness_record): the converged Ritz sine series with 16 x 16 terms
+(evaluate.REPORT_TERMS; the value of evaluate.analyze_design), with the polynomial Ritz solution p = 16 and the 8 x 8
+value next to it. The k best designs of the 8 x 8 model (exact, k = 20 first) are re-evaluated with 16 x 16 terms;
+k is doubled (up to 500) while (lambda8_1 - lambda8_k) / lambda8_1 < the largest relative difference (lambda8 -
+lambda16) / lambda8 seen in the k designs (minus 1e-9); the design reported is the best of the k by the 16 x 16
+value (same order). As the 16 x 16 basis contains the 8 x 8 one, lambda16 <= lambda8 for every design, so no design
+outside the k can then be better by the 16 x 16 value (see solve_max_stiffness).
 """
 from __future__ import annotations
 
@@ -40,18 +58,22 @@ from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
 import numpy as np
 
 from . import buckling
-from .evaluate import Evaluator, Problem
-from .exhaustive import _FullBounds, _count_tuples, _tuple_data, _valid_mask, arrange
+from .evaluate import DIRECTION_NAMES, REPORT_TERMS, Evaluator, Problem, analyze_design, main_load_direction
+from .exhaustive import _FullBounds, _count_tuples, _half_weights, _tuple_data, _valid_mask, arrange
 from .rules import PLY, full_laminate, notation, satisfies
 
 RTOL = 1e-9                 # objective values within this relative difference are equal
 PRUNE_RTOL = 2e-9           # pruning margin of the branch and bound (keeps every design of the 1e-9 tie window)
 COMPLIANCE_UNIT = "N/m"     # c = N^T A^-1 N with N in N/m and A in N/m (= J/m^2)
 OBJECTIVE = "max_stiffness"
+POLY_P = 16                 # polynomial Ritz solution used to check the reported buckling factor
+TOP_K_START, TOP_K_MAX = 20, 500
+PROVEN_IN = "proven in the 8x8 Ritz model"
 
 
 class NoFeasiblePlyCount(ValueError):
-    """No quasi-isotropic laminate with 8 <= N <= 64 meets the constraints: no default ply count."""
+    """No quasi-isotropic laminate with 8 <= N <= 64 meets the constraints and no design of 8-64 plies does
+    (objective min_plies): no default ply count."""
 
     def __init__(self, message: str, scan: List[Dict]):
         super().__init__(message)
@@ -144,9 +166,41 @@ def default_ply_count(problem: Problem, n_min: int = 8, n_max: int = 64) -> Dict
     return {"found": False, "n": None, "qi": None, "rf_strength": None, "lam": None, "scan": scan}
 
 
-def resolve_ply_count(problem: Problem, fixed_plies: Optional[int]) -> Tuple[Problem, Dict]:
+def min_plies_count(problem: Problem, time_limit: float = 600.0, seed: int = 0, budget: int = 10000) -> Dict:
+    """Fewest plies (8 <= N <= 64, the objective min_plies) with which a design meets the strength and buckling
+    constraints: the fallback of the default ply count when no quasi-isotropic laminate meets them.
+    Load that cannot buckle the plate: a design of N plies is feasible iff the largest strength margin of N plies is
+    >= the safety factor (it depends on the ply counts only), so the scan over N at count level is exact (proven).
+    Otherwise: api.design_search (exact search within time_limit, else GA + local search; "proven" as reported
+    there). Returns {"found", "n", "proven", "status", "method", "design", "scan"}."""
+    p = replace(problem, rules=replace(problem.rules, n_min=8, n_max=64))
+    sf = p.safety_factor
+    if not can_buckle(p):
+        scan = []
+        for n in p.rules.allowed_ply_counts(p.enc):
+            try:
+                ms = max_strength_margin(fixed_problem(p, n))
+            except ValueError:          # no valid design of n plies
+                continue
+            scan.append({"n": n, "max_strength_margin": ms})
+            if ms >= sf:
+                return {"found": True, "n": n, "proven": True, "status": "optimal", "scan": scan, "design": None,
+                        "method": "count-level scan of the largest strength margin (the load cannot buckle the plate)"}
+        return {"found": False, "n": None, "proven": True, "status": "infeasible", "scan": scan, "design": None,
+                "method": "count-level scan of the largest strength margin (the load cannot buckle the plate)"}
+    from .api import design_search
+    r = design_search(p, objective="min_plies", time_limit=time_limit, seed=seed, budget=budget)
+    found = r["status"] in ("optimal", "best found")
+    return {"found": found, "n": len(r["full"]) if found else None,
+            "proven": bool(r["n_proven"]) if found else r["status"] == "infeasible", "status": r["status"],
+            "design": notation(r["full"], True), "scan": None, "method": "api.design_search (objective min_plies)"}
+
+
+def resolve_ply_count(problem: Problem, fixed_plies: Optional[int], fallback_time_limit: float = 600.0
+                      ) -> Tuple[Problem, Dict]:
     """Problem with the ply count fixed: fixed_plies if given, else rules.n_min == n_max if already fixed, else the
-    default (quasi-isotropic rule). Raises NoFeasiblePlyCount when there is no default."""
+    default: the quasi-isotropic rule ("QI_ks"), else the fewest plies of the objective min_plies ("min_plies
+    fallback", min_plies_count). Raises NoFeasiblePlyCount when there is neither."""
     if fixed_plies is not None:
         p = fixed_problem(problem, fixed_plies)
         check_problem(p)
@@ -155,24 +209,33 @@ def resolve_ply_count(problem: Problem, fixed_plies: Optional[int]) -> Tuple[Pro
         check_problem(problem)
         return problem, {"source": "rules", "n": problem.rules.n_min}
     d = default_ply_count(problem)
-    if not d["found"]:
+    if d["found"]:
+        p = fixed_problem(problem, d["n"])
+        check_problem(p)
+        return p, dict(d, source="QI_ks", detail="smallest quasi-isotropic laminate meeting the constraints")
+    m = min_plies_count(problem, time_limit=fallback_time_limit)
+    if not m["found"]:
         raise NoFeasiblePlyCount("INFEASIBLE: no quasi-isotropic laminate [0/45/-45/90]_ks with 8 <= N <= 64 meets "
-                                 "the strength and buckling constraints, so there is no default ply count "
-                                 "(give fixed_plies explicitly)", d["scan"])
-    p = fixed_problem(problem, d["n"])
+                                 "the strength and buckling constraints, and no design of 8-64 plies does (objective "
+                                 f"min_plies: {m['status']}), so there is no default ply count", d["scan"])
+    p = fixed_problem(problem, m["n"])
     check_problem(p)
-    return p, dict(d, source="default (smallest quasi-isotropic laminate meeting the constraints)")
+    return p, {"source": "min_plies fallback", "n": m["n"], "n_proven": m["proven"], "min_plies": m,
+               "qi_scan": d["scan"], "found": True,
+               "detail": "no quasi-isotropic laminate meets the constraints: fewest plies of the objective min_plies"}
 
 
 # ---------------------------------------------------------------------------------------------- the order
 class Key(NamedTuple):
     """Comparison key of one design: feasible first; then tier 0 (strength met) before tier 1; in tier 0 the
-    objective score (lambda, or -c) then the strength margin; in tier 1 the strength margin; then the sequence."""
+    objective score (lambda, or -c) then the strength margin; in tier 1 the strength margin; then (compliance
+    objective) the bending stiffness in the main load direction; then the sequence."""
     feasible: bool
     tier: int
     primary: float
     secondary: float
     lex: Tuple[int, ...]
+    tertiary: float = 0.0       # compliance: D11 / D22 / D66 of the main load direction (larger wins); else 0
 
 
 def score(kind: str, lam, c):
@@ -180,11 +243,12 @@ def score(kind: str, lam, c):
     return lam if kind == "lambda" else -np.asarray(c)
 
 
-def make_key(kind: str, sf: float, rs: float, lam: float, c: float, half: Sequence[int]) -> Key:
+def make_key(kind: str, sf: float, rs: float, lam: float, c: float, half: Sequence[int], ddir: float = 0.0) -> Key:
+    """ddir: bending stiffness of the main load direction (used by the compliance objective only)."""
     tier = 0 if rs >= sf else 1
     s = float(score(kind, lam, c))
     return Key(bool(rs >= sf and lam >= sf), tier, s if tier == 0 else float(rs), float(rs) if tier == 0 else 0.0,
-               tuple(int(x) for x in half if x >= 0))
+               tuple(int(x) for x in half if x >= 0), float(ddir) if kind == "compliance" else 0.0)
 
 
 def _ranked_value(kind: str, sf: float, rs: float, lam: float, c: float) -> Tuple[float, str]:
@@ -220,6 +284,8 @@ def key_better(a: Key, b: Key, rtol: float = RTOL) -> bool:
         return a.primary > b.primary
     if not _close(a.secondary, b.secondary, rtol):
         return a.secondary > b.secondary
+    if not _close(a.tertiary, b.tertiary, rtol):
+        return a.tertiary > b.tertiary
     return a.lex < b.lex
 
 
@@ -240,7 +306,8 @@ def rank_order(res: Dict[str, np.ndarray], sf: float, kind: str) -> np.ndarray:
     s = score(kind, lam, res["c"])
     primary = np.where(tier == 0, s, rs)
     secondary = np.where(tier == 0, rs, 0.0)
-    return np.lexsort((-secondary, -primary, tier, ~feas))
+    tertiary = res["ddir"] if (kind == "compliance" and "ddir" in res) else np.zeros(len(rs))
+    return np.lexsort((-tertiary, -secondary, -primary, tier, ~feas))
 
 
 def _window(idx: np.ndarray, values: np.ndarray, rtol: float = RTOL) -> np.ndarray:
@@ -249,8 +316,9 @@ def _window(idx: np.ndarray, values: np.ndarray, rtol: float = RTOL) -> np.ndarr
     return idx[values >= vmax - rtol * abs(vmax)]
 
 
-def select(rs, lam, c, halves, kind: str, sf: float) -> int:
-    """Index of the best design of a set (the order of the module doc, with the 1e-9 tie window)."""
+def select(rs, lam, c, halves, kind: str, sf: float, ddir=None) -> int:
+    """Index of the best design of a set (the order of the module doc, with the 1e-9 tie window). ddir: bending
+    stiffness of the main load direction of every design (compliance objective; None = not used)."""
     rs, lam, c = (np.asarray(v, dtype=float) for v in (rs, lam, c))
     halves = np.asarray(halves)
     s = score(kind, lam, c)
@@ -263,6 +331,8 @@ def select(rs, lam, c, halves, kind: str, sf: float) -> int:
     else:
         idx = np.arange(len(rs))
         keep = _window(idx, rs[idx])
+    if kind == "compliance" and ddir is not None:
+        keep = _window(keep, np.asarray(ddir, dtype=float)[keep])
     order = np.lexsort(halves[keep].T[::-1])            # first ply = primary key
     return int(keep[order[0]])
 
@@ -300,6 +370,74 @@ def lex_smallest_arrangement(problem: Problem, counts: Sequence[int]) -> Optiona
                     rem, last, run = nrem, s, nrun
                     break
     return np.array(out, dtype=np.int8)
+
+
+class ArrangementDP:
+    """Exact maximum of a position-weighted sum V(s) = sum_k w_k v[s_k] over EVERY valid arrangement (outer ->
+    mid-plane) of the given ply counts (contiguity rule on the full laminate, as lex_smallest_arrangement), by dynamic
+    programming over (remaining counts, last ply code, run length): the same result as enumerating every valid
+    arrangement, without listing them. With v = Qbar_dd of the four ply codes and w = the half-ply weights
+    (exhaustive._half_weights), V = D_dd of the laminate. vmax: the largest value (-inf: no valid arrangement);
+    n_arrangements: number of valid arrangements; lex_smallest(thr): the lexicographically smallest arrangement with
+    V >= thr (None if there is none)."""
+
+    def __init__(self, problem: Problem, counts: Sequence[int], values: Sequence[float], weights: Sequence[float]):
+        rl, el = problem.rules.run_limits(PLY)
+        self.counts = tuple(int(x) for x in counts)
+        self.L = L = int(sum(self.counts))
+        self.rl = rl or L
+        self.el = el if el is not None else self.rl
+        self.v = [float(x) for x in values]
+        self.w = [float(x) for x in weights]
+        assert len(self.w) == L
+        self._best = lru_cache(maxsize=None)(self._best_raw)
+        self._count = lru_cache(maxsize=None)(self._count_raw)
+        self.vmax = self._best(self.counts, -1, 0)
+        self.n_arrangements = self._count(self.counts, -1, 0)
+
+    def _moves(self, rem, last, run):
+        for s in range(4):
+            if rem[s] and (s != last or run + 1 <= self.rl):
+                yield s, rem[:s] + (rem[s] - 1,) + rem[s + 1:], (run + 1 if s == last else 1)
+
+    def _best_raw(self, rem, last, run) -> float:
+        k = self.L - sum(rem)
+        if k == self.L:
+            return 0.0 if run <= self.el else -np.inf      # the run touching the mid-plane is mirrored
+        best = -np.inf
+        for s, nrem, nrun in self._moves(rem, last, run):
+            sub = self._best(nrem, s, nrun)
+            if sub > -np.inf:
+                best = max(best, self.w[k] * self.v[s] + sub)
+        return best
+
+    def _count_raw(self, rem, last, run) -> int:
+        if sum(rem) == 0:
+            return 1 if run <= self.el else 0
+        return sum(self._count(nrem, s, nrun) for s, nrem, nrun in self._moves(rem, last, run))
+
+    def lex_smallest(self, thr: float) -> Optional[np.ndarray]:
+        if self.vmax < thr:
+            return None
+        rem, last, run, acc, out = self.counts, -1, 0, 0.0, []
+        for k in range(self.L):
+            for s, nrem, nrun in self._moves(rem, last, run):
+                sub = self._best(nrem, s, nrun)
+                if sub > -np.inf and acc + self.w[k] * self.v[s] + sub >= thr:
+                    out.append(s)
+                    acc += self.w[k] * self.v[s]
+                    rem, last, run = nrem, s, nrun
+                    break
+            else:                                          # cannot happen: vmax >= thr guarantees a completion
+                raise RuntimeError("ArrangementDP: no completion reaches the threshold")
+        return np.array(out, dtype=np.int8)
+
+
+def direction_values(problem: Problem) -> Tuple[int, np.ndarray, np.ndarray]:
+    """(main load direction index, Qbar_dd of the ply codes 0, +45, -45, 90, half-ply weights outer -> mid-plane)."""
+    d = main_load_direction(problem.loads)
+    L = check_problem(problem) // 2
+    return d, Evaluator(problem).Qb[:, d, d].copy(), _half_weights(L, problem.ply_thickness)
 
 
 def _count_level(problem: Problem, tuples: List[Tuple[int, ...]]) -> Tuple[np.ndarray, np.ndarray]:
@@ -389,7 +527,7 @@ class _Pool:
 
 
 def exact_stiffness(problem: Problem, time_limit: float = 600.0, top_k: int = 1, block: int = 1 << 16,
-                    verbose: bool = False) -> Dict:
+                    verbose: bool = False, max_nodes: Optional[int] = None) -> Dict:
     """Exact answer of the fixed-thickness stiffest-laminate problem (symmetric, balanced, ply encoding, fixed N).
 
     Compliance (the load cannot buckle the plate): c and the strength margin depend on the ply counts only, so the
@@ -419,6 +557,7 @@ def exact_stiffness(problem: Problem, time_limit: float = 600.0, top_k: int = 1,
     The search runs depth first over the plies (outer -> mid-plane) in blocks, so the 3 000 000-arrangement cap of
     exhaustive.exact_full does not apply. If the time limit is reached the result is INCOMPLETE: the best design
     found, the largest bound left open ("upper_bound") and the relative gap; it is never reported as proven.
+    max_nodes (tests): the same happens once more than max_nodes nodes of the tree have been expanded.
 
     Returns {"status": "optimal" | "infeasible" | "incomplete", "complete", "proven", "kind", "full", "half",
     "lam", "c", "rf_strength", "value", "upper_bound", "gap", "top", ...}."""
@@ -437,7 +576,7 @@ def exact_stiffness(problem: Problem, time_limit: float = 600.0, top_k: int = 1,
     if kind == "compliance" or not np.any(rs_t >= sf):
         out = _exact_counts(problem, tuples, rs_t, c_t, kind, top_k)
     else:
-        out = _exact_bb(problem, L, kind, top_k, deadline, block, verbose)
+        out = _exact_bb(problem, L, kind, top_k, deadline, block, verbose, max_nodes)
     out.update(base)
     # the strength margin depends on the ply counts only: its largest value over every valid design
     out["max_rf_strength"] = float(np.max(rs_t))
@@ -448,6 +587,9 @@ def exact_stiffness(problem: Problem, time_limit: float = 600.0, top_k: int = 1,
     assert satisfies(full, problem.rules)
     out["full"] = full.tolist()
     out["notation"] = notation(full, True)
+    d = main_load_direction(problem.loads)
+    out["ddir"] = float(evaluate_half(problem, out["half"])["D"][d, d])
+    out["direction"] = DIRECTION_NAMES[d]
     return out
 
 
@@ -463,27 +605,47 @@ def _exact_counts(problem: Problem, tuples, rs_t: np.ndarray, c_t: np.ndarray, k
         idx = np.arange(len(tuples))
         keep = _window(idx, rs_t[idx])
         method = "count-level enumeration (no ply-count combination meets the strength constraint)"
-    arrs = {int(i): lex_smallest_arrangement(problem, tuples[i]) for i in keep}
+    extra: Dict = {}
+    if kind == "compliance":
+        # (3) every valid arrangement of the tied count tuples, by exact dynamic programming: the largest bending
+        # stiffness of the main load direction (within 1e-9), then (4) the lexicographically smallest sequence
+        d, vals, w = direction_values(problem)
+        dps = {int(i): ArrangementDP(problem, tuples[i], vals, w) for i in keep}
+        vmax = max(dp.vmax for dp in dps.values())
+        thr = vmax - RTOL * abs(vmax)
+        arrs = {i: dp.lex_smallest(thr) for i, dp in dps.items() if dp.vmax >= thr}
+        method += (f"; ties: largest {DIRECTION_NAMES[d]} (main load direction) over every valid arrangement of the "
+                   "tied ply-count combinations (exact dynamic programming), then the sequence")
+        extra = {"direction": DIRECTION_NAMES[d], "ddir_max": vmax,
+                 "n_arrangements_tied_tuples": int(sum(dp.n_arrangements for dp in dps.values())),
+                 "n_tuples_reaching_ddir_max": len(arrs)}
+    else:
+        arrs = {int(i): lex_smallest_arrangement(problem, tuples[i]) for i in keep}
     i_best = min(arrs, key=lambda i: tuple(arrs[i].tolist()))
     half = arrs[i_best]
     m = evaluate_half(problem, half)
     feasible = bool(m["rf_strength"] >= sf and m["lam"] >= sf)
-    # ranked count tuples (information): tier 0 by c (or rs), then the others by rs
+    # ranked count tuples (information): tier 0 by c (or rs), then the others by rs; each with its best arrangement
     order = sorted(range(len(tuples)), key=lambda i: (rs_t[i] < sf, c_t[i] if (kind == "compliance" and rs_t[i] >= sf)
                                                       else -rs_t[i]))
     top = []
     for i in order[:max(top_k, 5)]:
-        h = lex_smallest_arrangement(problem, tuples[i])
+        if kind == "compliance":
+            dp = dps[i] if i in dps else ArrangementDP(problem, tuples[i], vals, w)
+            h = dp.lex_smallest(dp.vmax - RTOL * abs(dp.vmax))
+        else:
+            h = lex_smallest_arrangement(problem, tuples[i])
         top.append({"counts": tuples[i], "half": h.tolist(), "c": float(c_t[i]), "rf_strength": float(rs_t[i]),
                     "notation": notation(full_laminate(h[None], True)[0], True)})
     value, meaning = _ranked_value(kind, sf, m["rf_strength"], m["lam"], m["c"])
     return {"status": "optimal" if feasible else "infeasible", "complete": True, "proven": True,
             "feasible": feasible, "half": half.tolist(), "lam": m["lam"], "c": m["c"], "rf_strength": m["rf_strength"],
             "value": value, "value_meaning": meaning, "upper_bound": None, "gap": 0.0, "top": top, "method": method,
-            "counts": tuples[i_best], "n_tied_count_tuples": len(keep)}
+            "counts": tuples[i_best], "n_tied_count_tuples": len(keep), **extra}
 
 
-def _exact_bb(problem: Problem, L: int, kind: str, top_k: int, deadline: float, block: int, verbose: bool) -> Dict:
+def _exact_bb(problem: Problem, L: int, kind: str, top_k: int, deadline: float, block: int, verbose: bool,
+              max_nodes: Optional[int] = None) -> Dict:
     sf = problem.safety_factor
     ev = Evaluator(problem)
     fb, data = _tuple_data(problem, ev, L)
@@ -493,6 +655,9 @@ def _exact_bb(problem: Problem, L: int, kind: str, top_k: int, deadline: float, 
     el = el if el is not None else rl
     pool = _Pool(top_k)
     stats = {"n_eigen": 0, "n_leaves": 0, "n_nodes": 0}
+
+    def stop() -> bool:
+        return time.perf_counter() > deadline or (max_nodes is not None and stats["n_nodes"] > max_nodes)
 
     def solve(halves: np.ndarray, rs: float) -> None:
         if len(halves):
@@ -524,7 +689,7 @@ def _exact_bb(problem: Problem, L: int, kind: str, top_k: int, deadline: float, 
         if d["lam_ub"] < pool.thr:
             per_tuple.append({"counts": d["counts"], "lam_ub": d["lam_ub"], "pruned_at_count_level": True})
             continue
-        if time.perf_counter() > deadline:
+        if stop():
             complete = False
             open_bounds += [x["lam_ub"] for x in data[ti:] if x["lam_ub"] >= pool.thr]
             break
@@ -536,7 +701,7 @@ def _exact_bb(problem: Problem, L: int, kind: str, top_k: int, deadline: float, 
         stack = [(np.zeros((1, 0), np.int8), rem0, np.full(1, -1, np.int16), np.zeros(1, np.int16), S0, b0)]
         done = True
         while stack:
-            if time.perf_counter() > deadline:
+            if stop():
                 done = False
                 break
             P, rem, last, run, S, bnd = stack.pop()
@@ -608,18 +773,19 @@ def _exact_bb(problem: Problem, L: int, kind: str, top_k: int, deadline: float, 
     # ranked list (the selected best first, then by lambda, strength margin, sequence; no tolerance)
     order = [ib] + [int(i) for i in np.lexsort(list(halves.T[::-1]) + [-rs, -lam]) if i != ib]
     top = [{"half": halves[i].tolist(), "lam": float(lam[i]), "rf_strength": float(rs[i]),
-            "notation": notation(full_laminate(halves[i][None], True)[0], True)} for i in order[:top_k]]
+            "notation": notation(full_laminate(halves[i][None], True)[0], True)} for i in order]
     status = ("optimal" if feasible else "infeasible") if complete else "incomplete"
     return {"status": status, "complete": complete, "proven": complete, "feasible": feasible,
             "half": best_half.tolist(), "lam": best_lam, "c": m["c"], "rf_strength": best_rs, "value": best_lam,
             "value_meaning": "lambda",
             "upper_bound": ub, "gap": (ub - best_lam) / abs(best_lam) if best_lam else None, "top": top,
-            "per_tuple": per_tuple, **stats,
+            "per_tuple": per_tuple, **stats, "top_k": top_k, "pool_threshold": float(pool.thr),
             "method": "branch and bound over the plies with proven Rayleigh-quotient / rearrangement bounds"}
 
 
 # ------------------------------------------------------------------------- brute force (verification only)
-def brute_force(problem: Problem, part: int = 0, n_parts: int = 1, top_k: int = 10, chunk: int = 1 << 15) -> Dict:
+def brute_force(problem: Problem, part: int = 0, n_parts: int = 1, top_k: int = 10, chunk: int = 1 << 15,
+                keep_all: bool = False) -> Dict:
     """Enumerate EVERY valid design and evaluate it, streaming (verification only, no bound).
 
     The 4^L ply strings of the half laminate are generated in blocks of `chunk` consecutive base-4 numbers (first
@@ -630,7 +796,11 @@ def brute_force(problem: Problem, part: int = 0, n_parts: int = 1, top_k: int = 
     arrangement generator of the exact search. Blocks b with b % n_parts == part form one part. Practical up to
     L = 12 (24 plies: 16.8 million strings, 1 864 416 valid designs).
     Returns the candidates for brute_force_merge, the number of valid designs, how many meet the strength
-    constraint and the largest strength margin of any valid design."""
+    constraint and the largest strength margin of any valid design. It also checks, design by design, that c and
+    the strength margin are the same for every arrangement of a ply-count tuple ("max_rel_spread_c_in_counts",
+    "max_rel_spread_rs_in_counts": largest relative difference to the first design seen with the same counts).
+    keep_all=True also returns (lambda, strength margin) of every valid design ("all_lam", "all_rs"; lambda of
+    EVERY design is then computed, also below the strength margin), in the order of the enumeration."""
     n = check_problem(problem)
     L = n // 2
     if L > 13:
@@ -645,6 +815,10 @@ def brute_force(problem: Problem, part: int = 0, n_parts: int = 1, top_k: int = 
     cand = None
     n_valid = n_ok = n_blocks = 0
     max_rs = -np.inf
+    dirn = main_load_direction(problem.loads)
+    first: Dict[int, Tuple[float, float]] = {}          # counts code -> (c, rs) of the first design seen
+    spread = [0.0, 0.0]
+    all_lam, all_rs = [], []
     for b, s in enumerate(range(0, total, chunk)):
         if b % n_parts != part:
             continue
@@ -657,27 +831,46 @@ def brute_force(problem: Problem, part: int = 0, n_parts: int = 1, top_k: int = 
         n_valid += len(h)
         r = evs.compute_plies(h, details=True)
         rs, c = r["rf_strength"], r["c"]
+        dd = r["D"][:, dirn, dirn]
         max_rs = max(max_rs, float(rs.max()))
+        code = np.stack([(h == k).sum(axis=1) for k in range(4)], axis=1) @ np.array([1, 64, 64 ** 2, 64 ** 3])
+        u, iu = np.unique(code, return_index=True)
+        for cc, i in zip(u.tolist(), iu.tolist()):
+            first.setdefault(cc, (float(c[i]), float(rs[i])))
+        ref = np.array([first[cc] for cc in code.tolist()])
+        spread[0] = max(spread[0], float(np.max(np.abs(c - ref[:, 0]) / np.abs(ref[:, 0]))))
+        spread[1] = max(spread[1], float(np.max(np.abs(rs - ref[:, 1]) / np.abs(ref[:, 1]))))
         ok = np.where(rs >= sf)[0]
         n_ok += len(ok)
         lam = np.full(len(h), np.inf)
+        need = np.arange(len(h)) if keep_all else ok
         if kind == "lambda":             # lambda is needed only where the strength constraint holds
-            for j in range(0, len(ok), 4096):
-                sl = ok[j:j + 4096]
+            for j in range(0, len(need), 4096):
+                sl = need[j:j + 4096]
                 lam[sl] = _lam_nocache(ev, buckling.d_vector(r["D"][sl]))
-        new = (h, rs, lam, c)
+        if keep_all:
+            all_lam.append(lam.astype(np.float64))
+            all_rs.append(rs.astype(np.float64))
+        new = (h, rs, lam, c, dd)
         if cand is not None:
             new = tuple(np.concatenate([x, y]) for x, y in zip(cand, new))
         cand = _reduce(*new, kind, sf, top_k)
     if cand is None:
-        cand = (np.zeros((0, L), np.int8), np.zeros(0), np.zeros(0), np.zeros(0))
-    H, rs, lam, c = cand
-    return {"n_valid": n_valid, "n_strength_ok": n_ok, "max_rf_strength": max_rs, "n_blocks": n_blocks,
-            "halves": H, "rs": rs, "lam": lam, "c": c, "kind": kind}
+        cand = (np.zeros((0, L), np.int8), np.zeros(0), np.zeros(0), np.zeros(0), np.zeros(0))
+    H, rs, lam, c, dd = cand
+    out = {"n_valid": n_valid, "n_strength_ok": n_ok, "max_rf_strength": max_rs, "n_blocks": n_blocks,
+           "halves": H, "rs": rs, "lam": lam, "c": c, "ddir": dd, "kind": kind,
+           "max_rel_spread_c_in_counts": spread[0], "max_rel_spread_rs_in_counts": spread[1],
+           "n_count_tuples_seen": len(first)}
+    if keep_all:
+        out["all_lam"] = np.concatenate(all_lam) if all_lam else np.zeros(0)
+        out["all_rs"] = np.concatenate(all_rs) if all_rs else np.zeros(0)
+    return out
 
 
-def _reduce(H, rs, lam, c, kind: str, sf: float, top_k: int):
-    """The top_k designs of the order and every design within 2e-9 of the k-th one (same feasibility / tier)."""
+def _reduce(H, rs, lam, c, dd, kind: str, sf: float, top_k: int):
+    """The top_k designs of the order and every design within 2e-9 of the k-th one (same feasibility / tier); with
+    the compliance objective every arrangement tied on c is kept, so the bending-stiffness tie-break sees them all."""
     tier = (rs < sf).astype(int)
     feas = (rs >= sf) & (lam >= sf)
     s = score(kind, lam, c)
@@ -687,7 +880,7 @@ def _reduce(H, rs, lam, c, kind: str, sf: float, top_k: int):
     pk = primary[k]
     same = (feas == feas[k]) & (tier == tier[k]) & (primary >= pk - PRUNE_RTOL * abs(pk))
     sel = np.union1d(order[:top_k], np.where(same)[0])
-    return H[sel], rs[sel], lam[sel], c[sel]
+    return H[sel], rs[sel], lam[sel], c[sel], dd[sel]
 
 
 def brute_force_merge(problem: Problem, parts: List[Dict], top_k: int = 10) -> Dict:
@@ -698,14 +891,17 @@ def brute_force_merge(problem: Problem, parts: List[Dict], top_k: int = 10) -> D
     rs = np.concatenate([p["rs"] for p in parts])
     lam = np.concatenate([p["lam"] for p in parts])
     c = np.concatenate([p["c"] for p in parts])
-    i = select(rs, lam, c, H, kind, sf)
+    dd = np.concatenate([p["ddir"] for p in parts])
+    i = select(rs, lam, c, H, kind, sf, ddir=dd)
     feasible = bool(rs[i] >= sf and lam[i] >= sf)
     tier = (rs < sf).astype(int)
     feas = (rs >= sf) & (lam >= sf)
     primary = np.where(tier == 0, score(kind, lam, c), rs)
-    order = [i] + [int(j) for j in np.lexsort(list(H.T[::-1]) + [-rs, -primary, tier, ~feas]) if j != i]
+    ter = dd if kind == "compliance" else np.zeros(len(rs))
+    order = [i] + [int(j) for j in np.lexsort(list(H.T[::-1]) + [-ter, -rs, -primary, tier, ~feas]) if j != i]
     top = [{"half": H[j].tolist(), "lam": float(lam[j]), "c": float(c[j]), "rf_strength": float(rs[j]),
-            "notation": notation(full_laminate(H[j][None], True)[0], True)} for j in order[:top_k]]
+            "ddir": float(dd[j]), "notation": notation(full_laminate(H[j][None], True)[0], True)}
+           for j in order[:top_k]]
     lam_i = float(lam[i])
     if kind == "lambda" and rs[i] < sf:     # lambda was not needed for the ranking: computed for the report
         lam_i = evaluate_half(problem, H[i])["lam"]
@@ -713,6 +909,9 @@ def brute_force_merge(problem: Problem, parts: List[Dict], top_k: int = 10) -> D
     max_rs = max(p["max_rf_strength"] for p in parts)
     return {"kind": kind, "n_valid": int(sum(p["n_valid"] for p in parts)),
             "n_strength_ok": int(sum(p["n_strength_ok"] for p in parts)), "max_rf_strength": max_rs,
+            "max_rel_spread_c_in_counts": max(p.get("max_rel_spread_c_in_counts", 0.0) for p in parts),
+            "max_rel_spread_rs_in_counts": max(p.get("max_rel_spread_rs_in_counts", 0.0) for p in parts),
+            "ddir": float(dd[i]), "n_tied_on_c_rs": int(np.sum(_tied_c_rs(rs, c, i, kind, sf))),
             "half": H[i].tolist(), "lam": lam_i, "c": float(c[i]), "rf_strength": float(rs[i]), "feasible": feasible,
             "value": value, "value_meaning": meaning, "top": top,
             "status": "optimal" if feasible else "infeasible",
@@ -720,33 +919,199 @@ def brute_force_merge(problem: Problem, parts: List[Dict], top_k: int = 10) -> D
             "notation": notation(full_laminate(H[i][None], True)[0], True)}
 
 
+def _tied_c_rs(rs, c, i: int, kind: str, sf: float) -> np.ndarray:
+    """Candidates tied with design i on the objective and the strength margin (compliance objective; else i)."""
+    if kind != "compliance" or rs[i] < sf:
+        return np.arange(len(rs)) == i
+    return np.array([_close(c[j], c[i], RTOL) and _close(rs[j], rs[i], RTOL) for j in range(len(rs))])
+
+
 # ------------------------------------------------------------------------------------------------ reporting
+def status_text(status: str, proven: bool, gap: Optional[float] = None, kind: str = "lambda") -> str:
+    """Status label of a result table: 'proven optimum (proven in the 8x8 Ritz model)', 'INFEASIBLE (proven ...)',
+    or 'INCOMPLETE (not proven, gap x %)' when the exact search did not finish (never called proven). Compliance
+    objective (the load cannot buckle the plate): the count-level search is exact, no Ritz model is involved."""
+    if status == "incomplete" or not proven:
+        g = "" if gap is None or not np.isfinite(gap) else f", gap {100 * gap:.3g} % in the 8x8 model"
+        return f"INCOMPLETE (not proven{g})"
+    where = PROVEN_IN if kind == "lambda" else "proven, exact count-level search"
+    return f"proven optimum ({where})" if status == "optimal" else f"INFEASIBLE ({where})"
+
+
+def report_lambdas(problem: Problem, halves: np.ndarray, batch: int = 256) -> np.ndarray:
+    """Reported buckling factor (Ritz double sine series 16 x 16, smaller value over +Nxy / -Nxy) of half laminates
+    (P, L), from the D of the symmetric path; inf when the load cannot buckle the plate."""
+    from .exhaustive import _q6
+    halves = np.atleast_2d(np.asarray(halves, dtype=np.int8))
+    if not can_buckle(problem):
+        return np.full(len(halves), np.inf)
+    a, b = problem.plate.a, problem.plate.b
+    mn = buckling.terms_for(REPORT_TERMS, a, b)
+    models = [buckling.RitzModel(a, b, *lc, *mn) for lc in problem.load_cases()]
+    q6 = _q6(Evaluator(problem))
+    w = _half_weights(halves.shape[1], problem.ply_thickness)
+    out = np.empty(len(halves))
+    for i in range(0, len(halves), batch):
+        Dv = np.einsum("k,pkc->pc", w, q6[halves[i:i + batch]])
+        lam = models[0].lam(Dv)
+        for m in models[1:]:
+            lam = np.minimum(lam, m.lam(Dv))
+        out[i:i + batch] = lam / problem.criterion_factors.get("buckling", 1.0)
+    return out
+
+
+def lambda_poly(problem: Problem, D: np.ndarray, p: int = POLY_P) -> float:
+    """Independent check of the reported buckling factor: polynomial Ritz solution of degree p (buckling.
+    ritz_polynomial), smaller value over +Nxy / -Nxy; inf when the load cannot buckle the plate."""
+    if not can_buckle(problem):
+        return float("inf")
+    a, b = problem.plate.a, problem.plate.b
+    return min(buckling.ritz_polynomial(D, *lc, a, b, p=p) for lc in problem.load_cases()) / \
+        problem.criterion_factors.get("buckling", 1.0)
+
+
+def solve_max_stiffness(problem: Problem, time_limit: float = 3600.0, k_start: int = TOP_K_START,
+                        k_max: int = TOP_K_MAX, max_nodes: Optional[int] = None, verbose: bool = False) -> Dict:
+    """Exact search (exact_stiffness, 8 x 8 model) and the reported design (16 x 16 value).
+
+    Buckling objective: the exact search returns the k best designs of the 8 x 8 model (every design within 2e-9 of
+    the k-th is kept too; k = k_start first). Each is re-evaluated with the 16 x 16 series. With
+    gap = (lambda8_1 - lambda8_k) / lambda8_1 and e_max = the largest (lambda8 - lambda16) / lambda8 of the k designs,
+    k is doubled while gap < e_max - 1e-9, up to k_max (then "k_cap_reached"). Why that suffices: the 16 x 16 basis
+    contains the 8 x 8 one, so lambda16 <= lambda8 for every design; a design outside the list has
+    lambda16 <= lambda8 < lambda8_k (1 - 2e-9) <= lambda8_1 (1 - e_max) <= lambda16 of the 8 x 8 best, so it cannot
+    beat, or tie within 1e-9, the best design of the list by the 16 x 16 value. The design returned ("half") is the
+    best of the list by the 16 x 16 value (same order: feasibility, lambda16, strength margin, sequence);
+    "best_differs" says when it is not the 8 x 8 optimum ("half_8x8"). Proven status refers to the 8 x 8 model
+    (PROVEN_IN); "proven_16x16" is True when the k rule is met. The time limit covers every k; if a larger k cannot
+    finish, the last complete k is kept and the rule is reported as not met.
+    Compliance objective (or no design meets strength): exact_stiffness alone (lambda does not rank the designs).
+    Incomplete search: the best design found by the 8 x 8 value, never proven."""
+    t0 = time.perf_counter()
+    sf = problem.safety_factor
+    kind = objective_kind(problem)
+    k, hist, last = k_start, [], None
+    note = None
+    while True:
+        left = max(0.0, time_limit - (time.perf_counter() - t0))
+        ex = exact_stiffness(problem, time_limit=left, top_k=k, max_nodes=max_nodes, verbose=verbose)
+        if not ex["complete"]:
+            if last is not None:
+                note = f"the search with k = {k} did not finish within the time limit; k = {last['top_k']} kept"
+                ex = last
+            break
+        if kind != "lambda" or ex["value_meaning"] != "lambda":
+            break
+        top = ex["top"]
+        H = np.array([d["half"] for d in top], dtype=np.int8)
+        lam8 = np.array([d["lam"] for d in top])
+        lam16 = report_lambdas(problem, H)
+        kk = min(k, len(top))
+        l8 = np.sort(lam8)[::-1]
+        gap = float((l8[0] - l8[kk - 1]) / l8[0])
+        e_max = float(np.max((lam8 - lam16) / lam8))
+        whole = not np.isfinite(ex.get("pool_threshold", -np.inf))   # fewer than k designs: every one is listed
+        ok = bool(whole or gap >= e_max - RTOL)
+        hist.append({"k": k, "n_listed": len(top), "gap": gap, "e_max": e_max, "rule_met": ok,
+                     "all_designs_listed": bool(whole), "time_s": ex["time_s"]})
+        ex["_lam16"] = lam16
+        last = ex
+        if ok or k >= k_max:
+            break
+        k = min(2 * k, k_max)
+    ex = dict(ex)
+    lam16 = ex.pop("_lam16", None)
+    ex.update(objective_kind=kind, proven_in=PROVEN_IN if ex["complete"] else None, k_history=hist,
+              k_final=ex.get("top_k") if hist else None, k_rule_met=hist[-1]["rule_met"] if hist else None,
+              k_cap_reached=bool(hist and not hist[-1]["rule_met"] and hist[-1]["k"] >= k_max),
+              k_note=note, half_8x8=list(ex["half"]), lam_8x8_best=ex["lam"], best_differs=False,
+              rank_8x8_of_selected=1, proven_16x16=bool(hist and hist[-1]["rule_met"]), top_table=None,
+              total_time_s=time.perf_counter() - t0)
+    if lam16 is not None:
+        top = ex["top"]
+        H = np.array([d["half"] for d in top], dtype=np.int8)
+        rs = np.array([d["rf_strength"] for d in top])
+        i16 = select(rs, lam16, np.zeros(len(top)), H, "lambda", sf)
+        order16 = np.lexsort(list(H.T[::-1]) + [-rs, -lam16])
+        rank16 = np.empty(len(top), int)
+        rank16[order16] = np.arange(1, len(top) + 1)
+        rank16[i16], rank16[order16[0]] = 1, rank16[i16]       # the selected design first (tie rule of select)
+        ex["top_table"] = [{"rank_8x8": j + 1, "rank_16x16": int(rank16[j]), "half": top[j]["half"],
+                            "notation": top[j]["notation"], "lambda_8x8": top[j]["lam"],
+                            "lambda_16x16": float(lam16[j]), "rel_diff_8_16": float((top[j]["lam"] - lam16[j])
+                                                                                    / top[j]["lam"]),
+                            "strength_margin": top[j]["rf_strength"]} for j in range(len(top))]
+        if i16 != 0:
+            half = H[i16]
+            m = evaluate_half(problem, half)
+            full = full_laminate(half[None], True)[0]
+            ex.update(best_differs=True, rank_8x8_of_selected=int(i16) + 1, half=half.tolist(), lam=m["lam"],
+                      c=m["c"], rf_strength=m["rf_strength"], full=full.tolist(), notation=notation(full, True),
+                      feasible=bool(m["rf_strength"] >= sf and m["lam"] >= sf))
+        ex["lam16"] = float(lam16[i16])
+    return ex
+
+
 def stiffness_record(problem: Problem, half: Sequence[int], status: str, proven: bool, runtime_s: float,
-                     objective: str = OBJECTIVE, **extra) -> Dict:
-    """One result line: objective, load case, t, N, sequence, lambda, c, strength margin, reserve factors, the
-    quasi-isotropic laminate with the same N (percent increase of lambda or decrease of c), proven or not, time."""
+                     objective: str = OBJECTIVE, poly: bool = True, **extra) -> Dict:
+    """One result line: objective, load case, t, N, sequence, lambda, c, strength margin, reserve factors, D, the
+    quasi-isotropic laminate with the same N (percent increase of lambda or decrease of c), proven or not, time.
+
+    Buckling factors: "lambda_16x16" (reported, = analyze_design(..)["lambda"] of the same design, the same number),
+    "lambda_poly16" (polynomial Ritz p = 16, check), "lambda_8x8" (optimisation model). For max_stiffness "lambda"
+    is the reported 16 x 16 value and margin / feasible / vs QI use it; for max_margin (an objective of the
+    fewest-plies study, unchanged) "lambda", "margin", "feasible" and the QI comparison keep the 8 x 8 model values,
+    the 16 x 16 and polynomial values are added only."""
     half = np.asarray(half, dtype=np.int8)
     n = 2 * len(half)
+    sf = problem.safety_factor
     kind = objective_kind(problem)
+    stiff = objective == OBJECTIVE
     m = evaluate_half(problem, half)
     full = full_laminate(half[None], True)[0]
+    det = analyze_design(problem, full.tolist(), report_lambda=stiff)
+    lam16 = det["lambda_16x16"] if det["lambda_16x16"] is not None else float("inf")
+    lam_p = lambda_poly(problem, det["D"]) if (poly and kind == "lambda") else (
+        float("inf") if kind != "lambda" else None)
+    lam = lam16 if stiff else m["lam"]
+    d = main_load_direction(problem.loads)
+    D = m["D"]
+    rs = m["rf_strength"]
+    result = ("proven optimum" if proven and status == "optimal" else "proven infeasible (best design shown)"
+              if proven and status == "infeasible" else f"{status} (not proven)")
     rec = {"objective": objective, "case": problem.name, "loads_N_per_m": list(problem.loads),
            "t_mm": problem.ply_thickness * 1e3, "N": n, "kind": kind, "notation": notation(full, True),
-           "half": half.tolist(), "lambda": m["lam"], "c_N_per_m": m["c"], "strength_margin": m["rf_strength"],
-           "rf": m["rf"], "margin": m["margin"], "feasible": bool(m["rf_strength"] >= problem.safety_factor
-                                                                 and m["lam"] >= problem.safety_factor),
-           "status": status, "proven": bool(proven), "runtime_s": float(runtime_s),
-           "result": ("proven optimum" if proven and status == "optimal" else "proven infeasible (best design shown)"
-                      if proven and status == "infeasible" else f"{status} (not proven)"),
+           "half": half.tolist(), "lambda": lam, "lambda_16x16": lam16, "lambda_poly16": lam_p,
+           "lambda_8x8": m["lam"],
+           "lambda_reported_as": ("Ritz sine series 16x16 (converged)" if stiff
+                                  else "Ritz sine series 8x8 (optimisation model)"),
+           "c_N_per_m": m["c"], "strength_margin": rs, "rf": m["rf"],
+           "margin": min(rs, lam16) if stiff else m["margin"],
+           "feasible": bool(rs >= sf and lam >= sf), "feasible_8x8": bool(rs >= sf and m["lam"] >= sf),
+           "D11_Nm": float(D[0, 0]), "D22_Nm": float(D[1, 1]), "D66_Nm": float(D[2, 2]), "D12_Nm": float(D[0, 1]),
+           "D16_Nm": float(D[0, 2]), "D26_Nm": float(D[1, 2]), "main_direction": DIRECTION_NAMES[d],
+           "ddir_Nm": float(D[d, d]),
+           "status": status, "proven": bool(proven), "proven_in": PROVEN_IN if proven else None,
+           "runtime_s": float(runtime_s), "result": result,
            "ritz_terms": buckling.terms_for(problem.ritz_terms, problem.plate.a, problem.plate.b),
+           "report_terms": buckling.terms_for(REPORT_TERMS, problem.plate.a, problem.plate.b),
            "shear_both_signs": problem.both_signs, "compliance_unit": COMPLIANCE_UNIT}
     if n % 8 == 0:
-        q = evaluate_half(problem, qi_half(n))
-        rec["qi"] = {"notation": f"[0/45/-45/90]_{n // 8}s", "lambda": q["lam"], "c_N_per_m": q["c"],
-                     "strength_margin": q["rf_strength"]}
+        qh = qi_half(n)
+        q = evaluate_half(problem, qh)
+        qdet = analyze_design(problem, full_laminate(qh[None], True)[0].tolist(), report_lambda=stiff)
+        q16 = qdet["lambda_16x16"] if qdet["lambda_16x16"] is not None else float("inf")
+        qlam = q16 if stiff else q["lam"]
+        rec["qi"] = {"notation": f"[0/45/-45/90]_{n // 8}s", "lambda": qlam, "lambda_16x16": q16,
+                     "lambda_poly16": (lambda_poly(problem, qdet["D"]) if (poly and kind == "lambda")
+                                       else (float("inf") if kind != "lambda" else None)),
+                     "lambda_8x8": q["lam"], "c_N_per_m": q["c"], "strength_margin": q["rf_strength"],
+                     "feasible": bool(q["rf_strength"] >= sf and qlam >= sf),
+                     "D11_Nm": float(q["D"][0, 0]), "D22_Nm": float(q["D"][1, 1]), "D66_Nm": float(q["D"][2, 2]),
+                     "ddir_Nm": float(q["D"][d, d])}
         if kind == "lambda":
-            rec["improvement_vs_qi_pct"] = 100.0 * (m["lam"] / q["lam"] - 1.0)
-            rec["improvement_vs_qi_meaning"] = "increase of lambda"
+            rec["improvement_vs_qi_pct"] = 100.0 * (lam / qlam - 1.0)
+            rec["improvement_vs_qi_meaning"] = "increase of lambda" + (" (16x16)" if stiff else "")
         else:
             rec["improvement_vs_qi_pct"] = 100.0 * (1.0 - m["c"] / q["c"])
             rec["improvement_vs_qi_meaning"] = "decrease of c"
@@ -758,22 +1123,24 @@ def stiffness_record(problem: Problem, half: Sequence[int], status: str, proven:
 
 
 def stiffness_search(problem: Problem, time_limit: float = 30.0, seed: int = 0, budget: int = 10000) -> Dict:
-    """Exact search within time_limit; if it cannot finish, GA + local search (fixed seed) and the better of the two
-    designs (never reported as proven; the gap to the open bound of the exact search is given)."""
+    """Exact search within time_limit (solve_max_stiffness: proven in the 8x8 Ritz model, reported design chosen by
+    the 16 x 16 value); if it cannot finish, GA + local search (fixed seed) and the better of the two designs (never
+    reported as proven; the gap to the open bound of the exact search is given)."""
     from .ga import GAConfig, GeneticAlgorithm
     t0 = time.perf_counter()
     check_problem(problem)
     sf = problem.safety_factor
     kind = objective_kind(problem)
-    ex = exact_stiffness(problem, time_limit=time_limit)
-    exs = {k: ex.get(k) for k in ("status", "complete", "time_s", "method", "lam", "c", "upper_bound", "gap")}
+    ex = solve_max_stiffness(problem, time_limit=time_limit)
+    exs = {k: ex.get(k) for k in ("status", "complete", "time_s", "method", "lam", "c", "upper_bound", "gap",
+                                  "proven_in", "k_final", "k_rule_met", "best_differs", "lam16")}
     if ex["complete"]:
         return {"status": ex["status"], "proven": True, "n_proven": True, "full": ex["full"], "exact": exs,
                 "ga": None, "objective": OBJECTIVE, "kind": kind, "time_s": time.perf_counter() - t0}
     g = GeneticAlgorithm(problem, GAConfig(budget=budget, local_search=True, objective=OBJECTIVE), seed).run()
     gh = [int(x) for x in g["best_genes"] if x >= 0]
-    kg = make_key(kind, sf, g["rf_strength"], g["lam"], g["c"], gh)
-    ke = make_key(kind, sf, ex["rf_strength"], ex["lam"], ex["c"], ex["half"])
+    kg = make_key(kind, sf, g["rf_strength"], g["lam"], g["c"], gh, g.get("ddir", 0.0))
+    ke = make_key(kind, sf, ex["rf_strength"], ex["lam"], ex["c"], ex["half"], ex.get("ddir", 0.0))
     half = gh if key_better(kg, ke) else ex["half"]
     full = full_laminate(np.array(half, dtype=np.int8)[None], True)[0]
     feasible = kg.feasible or ke.feasible

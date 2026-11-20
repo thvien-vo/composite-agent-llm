@@ -1,0 +1,16 @@
+{
+ "request": "Design the lightest IM7/8552 laminate for a shear load Nxy = 40 kN/m.",
+ "objective": "min_plies",
+ "shear_both": true,
+ "notation": "[-45/45_2/-45/45/-45_2/45/90/0_2/90]s",
+ "n_plies": 24,
+ "margin": 1.6988165612388244,
+ "status": "optimal",
+ "proven": true,
+ "expected": [
+  "[-45/45_2/-45/45/-45_2/45/90/0_2/90]s",
+  24,
+  1.699
+ ],
+ "pass": true
+}

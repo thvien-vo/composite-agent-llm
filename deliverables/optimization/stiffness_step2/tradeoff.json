@@ -1,0 +1,82 @@
+{
+ "t0125": {
+  "case": "C6",
+  "thickness": "t0125",
+  "N": 24,
+  "n_valid": 1864416,
+  "n_feasible": 418000,
+  "cpu_s": 634.2126144000003,
+  "stiffest_lambda_8x8": 3.59313069520682,
+  "stiffest_strength_margin": 1.5172318740732509,
+  "strongest_lambda_8x8": 1.6600763396499165,
+  "strongest_strength_margin": 1.656522404904295,
+  "strongest_margin": 1.656522404904295,
+  "qi_lambda_8x8": 2.1276771643806636,
+  "qi_strength_margin": 1.4537141843220576,
+  "exact_stiffest_lambda_8x8": 3.59313069520682,
+  "exact_stiffest_design_8x8": "[90_3/45/-45_2/0_3/45/0_2]s",
+  "exact_reported_design": "[90_3/45/-45_2/0_3/45/0_2]s",
+  "max_margin_design": "[90/-45/45/0/90/-45/45/0/-45/0/45/0]s",
+  "max_margin_margin_8x8": 1.656522404904295,
+  "enumeration_equals_exact": true,
+  "enumeration_equals_max_margin": true,
+  "pareto_strength_margin": [
+   1.656522404904295,
+   1.5172318740732509,
+   1.4537141843220576,
+   1.423119909346503,
+   1.3030644819904031,
+   1.1049475644349895,
+   0.8514605387878539
+  ],
+  "pareto_lambda_8x8": [
+   3.3877532235802708,
+   3.59313069520682,
+   3.8027775958405163,
+   4.005934777718287,
+   4.227838946770822,
+   4.316252412356354,
+   4.360441299135174
+  ]
+ },
+ "t0183": {
+  "case": "C6",
+  "thickness": "t0183",
+  "N": 24,
+  "n_valid": 1864416,
+  "n_feasible": 1826904,
+  "cpu_s": 638.8590099000003,
+  "stiffest_lambda_8x8": 13.516848128623385,
+  "stiffest_strength_margin": 1.6165824846709673,
+  "strongest_lambda_8x8": 2.7493035589495123,
+  "strongest_strength_margin": 2.4235585392711796,
+  "strongest_margin": 2.4235585392711796,
+  "qi_lambda_8x8": 6.663069336571312,
+  "qi_strength_margin": 2.126842000230542,
+  "exact_stiffest_lambda_8x8": 13.516848128623385,
+  "exact_stiffest_design_8x8": "[90_4/45/90/-45/90/-45/45/0_2]s",
+  "exact_reported_design": "[90_4/45/-45/90_2/-45/45/0_2]s",
+  "max_margin_design": "[90/-45/45/0/90/-45/45/0/-45/0/45/0]s",
+  "max_margin_margin_8x8": 2.4235585392711796,
+  "enumeration_equals_exact": true,
+  "enumeration_equals_max_margin": true,
+  "pareto_strength_margin": [
+   2.4235585392711796,
+   2.2197709210441285,
+   2.126842000230542,
+   2.082081352170308,
+   1.9064354597312387,
+   1.6165824846709673,
+   1.2457208266681814
+  ],
+  "pareto_lambda_8x8": [
+   10.609144564692057,
+   11.252308084292839,
+   11.908841819064833,
+   12.545052242213112,
+   13.239971043440915,
+   13.516848128623385,
+   13.655230784339418
+  ]
+ }
+}
