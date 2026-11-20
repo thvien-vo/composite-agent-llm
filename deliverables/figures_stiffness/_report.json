@@ -9,7 +9,7 @@
     "min_size": 7.0,
     "bad": []
    },
-   "n_text": 31,
+   "n_text": 33,
    "titles": false,
    "text": [
     "0",
@@ -17,6 +17,7 @@
     "50",
     "75",
     "100",
+    "125",
     "C3",
     "24 / 16",
     "26.2",
@@ -39,10 +40,11 @@
     "28.3",
     "31.5",
     "Load case and $N$ ($t = 0.125$ / $0.18288\\,\\mathrm{mm}$)",
-    "Increase of $\\lambda$ over QI (\\%)",
-    "* best known design, search incomplete (not proven)",
+    "Increase of $\\lambda$ (Ritz $16 \\times 16$)",
+    "over QI (\\%)",
     "$t = 0.125\\,\\mathrm{mm}$",
-    "$t = 0.18288\\,\\mathrm{mm}$"
+    "$t = 0.18288\\,\\mathrm{mm}$",
+    "* best known design, search incomplete (not proven)"
    ]
   },
   {
@@ -54,12 +56,13 @@
     "min_size": 7.0,
     "bad": []
    },
-   "n_text": 19,
+   "n_text": 20,
    "titles": false,
    "text": [
     "0",
     "20",
     "40",
+    "60",
     "C1",
     "48 / 32",
     "50.3",
@@ -70,8 +73,8 @@
     "17.4",
     "C8",
     "-- / 64",
-    "no feasible $N$",
-    "no QI with the same $N$",
+    "$t = 0.125$: no feasible $N$",
+    "$t = 0.18288$: no QI with the same $N$",
     "Load case and $N$ ($t = 0.125$ / $0.18288\\,\\mathrm{mm}$)",
     "Decrease of $c$ from QI (\\%)",
     "$t = 0.125\\,\\mathrm{mm}$",
@@ -87,68 +90,70 @@
     "min_size": 7.0,
     "bad": []
    },
-   "n_text": 66,
+   "n_text": 68,
    "titles": false,
    "text": [
     "\\textbf{C1}",
     "$N = 48$",
-    "$c = 3062\\,\\mathrm{N/m}$",
+    "$c = 3062\\,\\mathrm{N/m}$, margin $= 3.434$",
     "Stiffest",
-    "$c = 3062\\,\\mathrm{N/m}$",
+    "$c = 3062\\,\\mathrm{N/m}$, margin $= 3.434$",
     "Strongest",
-    "$c = 6163\\,\\mathrm{N/m}$",
+    "$c = 6163\\,\\mathrm{N/m}$, margin $= 1.692$",
     "QI",
     "\\textbf{C2}",
     "$N = 32$",
-    "$c = 3166\\,\\mathrm{N/m}$",
+    "$c = 3166\\,\\mathrm{N/m}$, margin $= 2.556$",
     "Stiffest",
-    "$c = 3166\\,\\mathrm{N/m}$",
+    "$c = 3166\\,\\mathrm{N/m}$, margin $= 2.556$",
     "Strongest",
-    "$c = 3841\\,\\mathrm{N/m}$",
+    "$c = 3841\\,\\mathrm{N/m}$, margin $= 1.922$",
     "QI",
     "\\textbf{C3}",
     "$N = 24$",
-    "$\\lambda = 3.007$",
+    "$\\lambda = 3.007$, margin $= 138.697$",
     "Stiffest",
-    "$\\lambda = 3.007$",
+    "$\\lambda = 3.007$, margin $= 138.697$",
     "Strongest",
-    "$\\lambda = 2.382$",
+    "$\\lambda = 2.382$, margin $= 194.936$",
     "QI",
     "\\textbf{C4}",
     "$N = 24$",
-    "$\\lambda = 2.005$",
+    "$\\lambda = 2.005$, margin $= 201.399$",
     "Stiffest",
-    "$\\lambda = 2.005$",
+    "$\\lambda = 2.005$, margin $= 201.399$",
     "Strongest",
-    "$\\lambda = 1.588$",
+    "$\\lambda = 1.588$, margin $= 229.246$",
     "QI",
     "\\textbf{C5}",
     "$N = 56$",
-    "$\\lambda = 2.904$*",
+    "$\\lambda = 2.904$*, margin $= 9.312$",
     "Stiffest",
-    "$\\lambda = 2.404$",
+    "$\\lambda = 2.404$, margin $= 9.312$",
     "Strongest",
-    "$\\lambda = 2.314$",
+    "$\\lambda = 2.314$, margin $= 6.397$",
     "QI",
     "\\textbf{C6}",
     "$N = 32$",
-    "$\\lambda = 10.039$",
+    "$\\lambda = 10.039$, margin $= 1.603$",
     "Stiffest",
-    "$\\lambda = 6.353$",
+    "$\\lambda = 6.353$, margin $= 2.321$",
     "Strongest",
-    "$\\lambda = 5.316$",
+    "$\\lambda = 5.316$, margin $= 1.938$",
     "QI",
     "\\textbf{C7}",
     "$N = 24$",
-    "$\\lambda = 2.880$",
+    "$\\lambda = 2.880$, margin $= 126.848$",
     "Stiffest",
-    "$\\lambda = 2.880$",
+    "$\\lambda = 2.880$, margin $= 126.848$",
     "Strongest",
-    "$\\lambda = 2.245$",
+    "$\\lambda = 2.245$, margin $= 155.254$",
     "QI",
     "\\textbf{C8}",
     "no feasible $N$",
     "No laminate of $8$ to $64$ plies meets both constraints (no QI, no fewest-plies design)",
+    "C1, C2: $c$ and margin depend only on ply counts; stiffest and strongest have the same counts, only the ply order differs.",
+    "C3, C4, C7: stiffest and strongest are mirror images ($+45$ and $-45$ swapped) with identical values.",
     "Outer ply $\\rightarrow$ mid-plane (half laminate, symmetric)",
     "* best known design, search incomplete (not proven)",
     "$0^\\circ$",
@@ -167,73 +172,76 @@
     "min_size": 7.0,
     "bad": []
    },
-   "n_text": 70,
+   "n_text": 73,
    "titles": false,
    "text": [
     "\\textbf{C1}",
     "$N = 32$",
-    "$c = 3007\\,\\mathrm{N/m}$",
+    "$c = 3007\\,\\mathrm{N/m}$, margin $= 3.511$",
     "Stiffest",
-    "$c = 3007\\,\\mathrm{N/m}$",
+    "$c = 3007\\,\\mathrm{N/m}$, margin $= 3.511$",
     "Strongest",
-    "$c = 6318\\,\\mathrm{N/m}$",
+    "$c = 6318\\,\\mathrm{N/m}$, margin $= 1.650$",
     "QI",
     "\\textbf{C2}",
     "$N = 24$",
-    "$c = 2893\\,\\mathrm{N/m}$",
+    "$c = 2893\\,\\mathrm{N/m}$, margin $= 2.771$",
     "Stiffest",
-    "$c = 2893\\,\\mathrm{N/m}$",
+    "$c = 2893\\,\\mathrm{N/m}$, margin $= 2.771$",
     "Strongest",
-    "$c = 3500\\,\\mathrm{N/m}$",
+    "$c = 3500\\,\\mathrm{N/m}$, margin $= 2.109$",
     "QI",
     "\\textbf{C3}",
     "$N = 16$",
-    "$\\lambda = 2.816$",
+    "$\\lambda = 2.816$, margin $= 108.615$",
     "Stiffest",
-    "$\\lambda = 2.816$",
+    "$\\lambda = 2.816$, margin $= 108.615$",
     "Strongest",
-    "$\\lambda = 2.189$",
+    "$\\lambda = 2.189$, margin $= 190.133$",
     "QI",
     "\\textbf{C4}",
     "$N = 24$",
-    "$\\lambda = 6.278$",
+    "$\\lambda = 6.278$, margin $= 294.655$",
     "Stiffest",
-    "$\\lambda = 6.278$",
+    "$\\lambda = 6.278$, margin $= 294.655$",
     "Strongest",
-    "$\\lambda = 4.973$",
+    "$\\lambda = 4.973$, margin $= 335.396$",
     "QI",
     "\\textbf{C5}",
     "$N = 40$",
-    "$\\lambda = 3.317$",
+    "$\\lambda = 3.317$, margin $= 9.884$",
     "Stiffest",
-    "$\\lambda = 2.725$",
+    "$\\lambda = 2.725$, margin $= 9.884$",
     "Strongest",
-    "$\\lambda = 2.613$",
+    "$\\lambda = 2.613$, margin $= 6.685$",
     "QI",
     "\\textbf{C6}",
     "$N = 24$",
-    "$\\lambda = 13.441$",
+    "$\\lambda = 13.441$, margin $= 1.617$",
     "Stiffest",
-    "$\\lambda = 8.862$",
+    "$\\lambda = 8.862$, margin $= 2.424$",
     "Strongest",
-    "$\\lambda = 6.623$",
+    "$\\lambda = 6.623$, margin $= 2.127$",
     "QI",
     "\\textbf{C7}",
     "$N = 16$",
-    "$\\lambda = 2.690$",
+    "$\\lambda = 2.690$, margin $= 103.245$",
     "Stiffest",
-    "$\\lambda = 2.690$",
+    "$\\lambda = 2.690$, margin $= 103.245$",
     "Strongest",
-    "$\\lambda = 2.046$",
+    "$\\lambda = 2.046$, margin $= 151.428$",
     "QI",
     "\\textbf{C8}",
     "$N = 64$",
-    "$c = 21809\\,\\mathrm{N/m}$",
+    "$c = 21809\\,\\mathrm{N/m}$, margin $= 1.512$",
     "Stiffest",
-    "$c = 22551\\,\\mathrm{N/m}$",
+    "$c = 22551\\,\\mathrm{N/m}$, margin $= 1.526$",
     "Strongest",
-    "$c = 24695\\,\\mathrm{N/m}$",
+    "$c = 24695\\,\\mathrm{N/m}$, margin $= 1.406$",
     "QI (fails)",
+    "C8: stiffest and strongest have different ply counts (margin $1.512$ vs $1.526$, $c = 21809$ vs $22551\\,\\mathrm{N/m}$).",
+    "C1, C2: $c$ and margin depend only on ply counts; stiffest and strongest have the same counts, only the ply order differs.",
+    "C3, C4, C7: stiffest and strongest are mirror images ($+45$ and $-45$ swapped) with identical values.",
     "Outer ply $\\rightarrow$ mid-plane (half laminate, symmetric)",
     "$0^\\circ$",
     "$+45^\\circ$",
@@ -248,10 +256,10 @@
    "collisions": [],
    "colours": [],
    "fonts": {
-    "min_size": 8.0,
+    "min_size": 7.0,
     "bad": []
    },
-   "n_text": 37,
+   "n_text": 44,
    "titles": false,
    "text": [
     "1",
@@ -263,6 +271,8 @@
     "3",
     "3.5",
     "4",
+    "infeasible",
+    "(margin $< 1.5$)",
     "\\textbf{(a)}",
     "$t = 0.125\\,\\mathrm{mm}$, default $N$ of C6 is $32$",
     "Strength margin (--)",
@@ -281,11 +291,16 @@
     "11",
     "12",
     "13",
+    "infeasible",
+    "(margin $< 1.5$)",
     "\\textbf{(b)}",
-    "$t = 0.18288\\,\\mathrm{mm}$, default $N$ of C6",
+    "$t = 0.18288\\,\\mathrm{mm}$, default $N$ of C6 is $24$",
     "Strength margin (--)",
     "$\\lambda$, Ritz $8 \\times 8$ terms (--)",
-    "Valid designs",
+    "Designs with the same ply counts share the same strength margin, so they form vertical lines.",
+    "(b) 269\\,640 designs tie for the strongest; their $\\lambda$ ranges from $2.749$ to $10.609$.",
+    "(a) 208\\,902 designs tie for the strongest; their $\\lambda$ ranges from $1.657$ to $3.388$.",
+    "Valid designs ($1\\,864\\,416$)",
     "Stiffest",
     "Strongest",
     "QI",
@@ -299,10 +314,10 @@
    "collisions": [],
    "colours": [],
    "fonts": {
-    "min_size": 8.0,
+    "min_size": 7.0,
     "bad": []
    },
-   "n_text": 38,
+   "n_text": 41,
    "titles": false,
    "text": [
     "100",
@@ -338,56 +353,132 @@
     "\\textbf{(c)}",
     "C5, $t = 0.18288\\,\\mathrm{mm}$, $N = 40$",
     "Distinct designs evaluated",
-    "$\\lambda$ of the best design so far (--)",
+    "$\\lambda$ (Ritz $8 \\times 8$)",
+    "of the best design so far (--)",
     "GA, median",
     "GA + local search, median",
-    "Min and max of $20$ seeds",
-    "Proven optimum"
+    "Proven optimum",
+    "GA, min/max",
+    "GA + local search, min/max",
+    "GA + local search history starts after its first local search."
    ]
   }
  ],
  "info": {
   "Fig1": {
-   "C3 t0125": 26.246832857510995,
-   "C3 t0183": 28.6706180408671,
-   "C4 t0125": 26.247360215526317,
-   "C4 t0183": 26.24736021552625,
-   "C5 t0125": 25.50708621657467,
-   "C5 t0183": 26.949785114042868,
-   "C6 t0125": 88.84496568015851,
-   "C6 t0183": 102.9340596760031,
-   "C7 t0125": 28.250147200128104,
-   "C7 t0183": 31.483467876653904
+   "C3 t0125": 26.2,
+   "C3 t0183": 28.7,
+   "C4 t0125": 26.2,
+   "C4 t0183": 26.2,
+   "C5 t0125": 25.5,
+   "C5 t0183": 26.9,
+   "C6 t0125": 88.8,
+   "C6 t0183": 102.9,
+   "C7 t0125": 28.3,
+   "C7 t0183": 31.5
   },
   "Fig2": {
-   "C1 t0125": 50.307882854361765,
-   "C1 t0183": 52.40253496360441,
-   "C2 t0125": 17.57701417759262,
-   "C2 t0183": 17.356613500696426,
+   "C1 t0125": 50.3,
+   "C1 t0183": 52.4,
+   "C2 t0125": 17.6,
+   "C2 t0183": 17.4,
    "C8 t0125": null,
    "C8 t0183": null
   },
   "Fig4": {
    "t0125": {
-    "cells": 1377,
-    "rects": 1244,
-    "n": 1864416
+    "groups": 16,
+    "n": 1864416,
+    "pareto": [
+     [
+      1.656522404904295,
+      3.3877532235802708
+     ],
+     [
+      1.5172318740732509,
+      3.59313069520682
+     ],
+     [
+      1.4537141843220576,
+      3.8027775958405163
+     ],
+     [
+      1.423119909346503,
+      4.005934777718287
+     ],
+     [
+      1.3030644819904031,
+      4.227838946770822
+     ],
+     [
+      1.1049475644349895,
+      4.316252412356354
+     ],
+     [
+      0.8514605387878539,
+      4.360441299135174
+     ]
+    ],
+    "strongest": [
+     1.656522404904295,
+     2.847223091162265
+    ],
+    "n_tied": 208902,
+    "infeasible_label_y_mm": 25.482916666666668
    },
    "t0183": {
-    "cells": 1386,
-    "rects": 1252,
-    "n": 1864416
+    "groups": 16,
+    "n": 1864416,
+    "pareto": [
+     [
+      2.4235585392711796,
+      10.609144564692057
+     ],
+     [
+      2.2197709210441285,
+      11.252308084292839
+     ],
+     [
+      2.126842000230542,
+      11.908841819064833
+     ],
+     [
+      2.082081352170308,
+      12.545052242213112
+     ],
+     [
+      1.9064354597312387,
+      13.239971043440915
+     ],
+     [
+      1.6165824846709673,
+      13.516848128623385
+     ],
+     [
+      1.2457208266681814,
+      13.655230784339418
+     ]
+    ],
+    "strongest": [
+     2.4235585392711796,
+     8.916411376076226
+    ],
+    "n_tied": 269640,
+    "infeasible_label_y_mm": 25.482916666666668
    }
   },
   "Fig5": {
    "C7 t0125": {
-    "optimum_lambda_16x16": 2.8797773050669004
+    "optimum_lambda_8x8": 2.8798443824964073,
+    "ga_ls_first_point": 553.0
    },
    "C6 t0125": {
-    "optimum_lambda_16x16": 10.038937509472554
+    "optimum_lambda_8x8": 10.09519132203049,
+    "ga_ls_first_point": 1211.0
    },
    "C5 t0183": {
-    "optimum_lambda_16x16": 3.316970602126091
+    "optimum_lambda_8x8": 3.318635602805532,
+    "ga_ls_first_point": 1927.0
    }
   }
  }

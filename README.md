@@ -298,11 +298,14 @@ Optimisation (IM7/8552, simply supported 0.5 m × 0.5 m plate, safety factor 1.5
   is infeasible (no design of 8–64 plies), as in the fewest-plies study. 14 proven optima; pure shear with 0.125 mm
   plies (N = 56) is INCOMPLETE after 3600 s: best known λ8 = 2.9054, gap 0.455 % to the bound of the 8 × 8 model, and
   no GA run found a better design. Against the QI laminate with the same N (λ with 16 × 16 terms): +26.2 to +31.5 % in
-  compression and compression + shear, +25.5 % (best known) and +27.0 % in pure shear, +88.8 % and +102.9 % in
+  compression and compression + shear, +25.5 % (best known) and +26.9 % in pure shear, +88.8 % and +102.9 % in
   tension + shear; c −50.3 / −52.4 % in uniaxial and −17.6 / −17.4 % in biaxial tension. The 16 × 16 check changes the
   reported design only for tension + shear with 0.18288 mm plies (both sequences in the summary). The enumeration of
   every valid 24-ply design of that case (1 864 416 per thickness) gives the same optimum as the exact search and
-  max_margin. GA + local search (20 seeds, 10 000 designs) reaches the 8 × 8 optimum in 17–20 runs except pure shear
+  max_margin; the max_margin optimum is not unique (208 902 and 269 640 designs tie at the largest margin, which is
+  set by strength), so "strongest" means the design max_margin returns. Percentages against QI are rounded once from
+  the unrounded values (results.csv, column "vs QI 1 decimal (%)"). GA + local search (20 seeds, 10 000 designs)
+  reaches the 8 × 8 optimum in 17–20 runs except pure shear
   (3/20 with 40 plies; 5/20 reach the best known design with 56 plies); plain GA 0–20. MATLAB re-check of the 30
   designs (max_stiffness and max_margin): 30/30 pass. Figures and LaTeX table: `deliverables/figures_stiffness/`.
 

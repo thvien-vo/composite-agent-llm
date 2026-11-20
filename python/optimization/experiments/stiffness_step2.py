@@ -556,6 +556,8 @@ def run(a, workers: int) -> None:
 
     # 8) tables and summary
     rows, topk_rows = results_rows(defaults, by_key, matlab)
+    fig4 = tradeoff_figure_data(tradeoff, rows)
+    write_json("tradeoff_figure.json", fig4)
     for r in probs:
         for x in r.get("top_table") or []:
             topk_rows.append({"case": r["case"], "thickness": r["thickness"], "N": r["N"],
@@ -571,7 +573,7 @@ def run(a, workers: int) -> None:
     write_csv("ga_summary.csv", ga_sum)
     verify_old = step1_designs()
     write_summary(defaults, verify, rows, probs, ga_sum, tradeoff, matlab, demo, verify_old,
-                  time.perf_counter() - T, ga_runs)
+                  time.perf_counter() - T, ga_runs, fig4)
     print(f"all done ({time.perf_counter() - T:.0f} s this run)", flush=True)
 
 
@@ -607,6 +609,63 @@ def tradeoff_summary(cid, tk, n, lam8, rs, cpu) -> Dict:
             "enumeration_equals_exact": bool(abs(lam8[i_s] - ex["lam_8x8_best"]) <= 1e-9 * ex["lam_8x8_best"]),
             "enumeration_equals_max_margin": bool(abs(margin[i_m] - mm.stiffness["margin"]) <= 1e-9 * margin[i_m]),
             "pareto_strength_margin": [float(rs[i]) for i in front], "pareto_lambda_8x8": [float(lam8[i]) for i in front]}
+
+
+def tradeoff_figure_data(tradeoff, rows) -> Dict:
+    """Figure 4 data, from saved results only (tradeoff_C6_N24_*.npz, tradeoff.json, results rows); nothing is
+    searched again. Strongest = the max_margin result (objective and tie-break unchanged): results.csv when N = 24
+    is the default N, else the max_margin result at N = 24 of tradeoff.json; the one design is evaluated to place
+    it and its (strength margin, lambda 8x8) pair is checked against the enumeration file. Every design whose margin
+    min(strength margin, lambda 8x8) equals the largest one ties with it: count and lambda 8x8 range. Groups: the
+    designs of one strength-margin value (one ply-count tuple) form one vertical line, lambda 8x8 min to max. Pareto
+    points of tradeoff.json (largest strength margin and lambda 8x8)."""
+    cid, n = TRADEOFF
+    out = {}
+    for tk, t in tradeoff.items():
+        z = np.load(os.path.join(OUT, f"tradeoff_{cid}_N{n}_{tk}.npz"))
+        lam32, rs32 = z["lambda_8x8"], z["strength_margin"]
+        lam, rs = lam32.astype(np.float64), rs32.astype(np.float64)
+        margin = np.minimum(rs, lam)
+        best = float(margin.max())
+        tie = margin >= best * (1 - 1e-6)          # float32 file; exact equality gives the same count here
+        row = next((r for r in rows if r["case"] == cid and r.get("N (-)") == n
+                    and abs(r["t (mm)"] - THICKNESSES[tk] * 1e3) < 1e-9), None)
+        design = row["max_margin sequence"] if row else t["max_margin_design"]
+        if design != t["max_margin_design"]:
+            raise RuntimeError(f"max_margin design of results.csv and tradeoff.json differ ({tk})")
+        p = problem(cid, tk, n)
+        h = parse_half(design)
+        e = st.evaluate_half(p, h)
+        groups = []
+        for v in np.unique(rs32):
+            sel = rs32 == v
+            groups.append({"strength_margin": float(v), "lambda_8x8_min": float(lam[sel].min()),
+                           "lambda_8x8_max": float(lam[sel].max()), "n_designs": int(sel.sum())})
+        i_first = int(np.argmax(margin))
+        out[tk] = {
+            "case": cid, "thickness": tk, "t_mm": THICKNESSES[tk] * 1e3, "N": n,
+            "default_N": next((r["N (-)"] for r in rows if r["case"] == cid
+                               and abs(r["t (mm)"] - THICKNESSES[tk] * 1e3) < 1e-9), None),
+            "n_valid": int(len(rs)), "n_feasible": t["n_feasible"],
+            "strongest_source": ("results.csv (max_margin at the default N)" if row else
+                                 "tradeoff.json (max_margin at N = 24, the same objective and tie-break)"),
+            "strongest_design": design, "strongest_strength_margin": e["rf_strength"],
+            "strongest_lambda_8x8": e["lam"], "strongest_lambda_16x16": float(st.report_lambdas(p, h[None])[0]),
+            "strongest_margin": min(e["rf_strength"], e["lam"]),
+            "strongest_pair_in_enumeration": bool(np.any((lam32 == np.float32(e["lam"]))
+                                                         & (rs32 == np.float32(e["rf_strength"])))),
+            "strongest_lambda_8x8_results_csv": row["max_margin lambda 8x8 (-)"] if row else None,
+            "max_margin_value": best, "n_tied_for_strongest": int(tie.sum()),
+            "n_tied_exact_float32": int((margin == margin.max()).sum()),
+            "tied_lambda_8x8_min": float(lam[tie].min()), "tied_lambda_8x8_max": float(lam[tie].max()),
+            "tied_strength_margins": sorted({float(v) for v in rs32[tie]}),
+            "first_enumerated_at_max_margin": {"strength_margin": float(rs[i_first]), "lambda_8x8": float(lam[i_first]),
+                                               "note": "tradeoff.json 'strongest_*' (shown by the earlier figure)"},
+            "stiffest_strength_margin": t["stiffest_strength_margin"], "stiffest_lambda_8x8": t["stiffest_lambda_8x8"],
+            "qi_strength_margin": t["qi_strength_margin"], "qi_lambda_8x8": t["qi_lambda_8x8"],
+            "pareto": [[a, b] for a, b in zip(t["pareto_strength_margin"], t["pareto_lambda_8x8"])],
+            "groups": groups}
+    return out
 
 
 def results_rows(defaults, by_key, matlab):
@@ -654,6 +713,8 @@ def results_rows(defaults, by_key, matlab):
             "QI lambda 8x8 (-)": qi.get("lambda_8x8"), "QI c (N/m)": qi.get("c_N_per_m"),
             "QI strength margin (-)": qi.get("strength_margin"),
             "vs QI (%)": vs if qi_ok else None,
+            # rounded ONCE from the unrounded value above; summary, table and figures all print this column
+            "vs QI 1 decimal (%)": round(vs, 1) if (qi_ok and vs is not None) else None,
             "vs QI meaning": (s.get("improvement_vs_qi_meaning") if qi_ok else
                               f"no QI with the same N: {qi.get('notation')} fails the constraints (strength margin "
                               f"{qi.get('strength_margin', float('nan')):.4g})" if qi else "no QI with the same N"),
@@ -854,7 +915,7 @@ def run_log_lines() -> List[str]:
     return out
 
 
-def write_summary(defaults, verify, rows, probs, ga_sum, tradeoff, matlab, demo, old, total, ga_runs=()):
+def write_summary(defaults, verify, rows, probs, ga_sum, tradeoff, matlab, demo, old, total, ga_runs=(), fig4=None):
     import scipy
     T = THICKNESSES
     L = ["# Fixed thickness, stiffest laminate (objective max_stiffness): step 2", "",
@@ -908,6 +969,9 @@ def write_summary(defaults, verify, rows, probs, ga_sum, tradeoff, matlab, demo,
     L += ["", "## The 16 problems (max_stiffness, exact search, default N)", "",
           "lambda: 16 x 16 value (reported); vs QI: change against [0/45/-45/90]_ks with the same N (lambda: "
           "increase of the 16 x 16 value, c: decrease). Strength margin = min(RF Max Stress, RF Tsai-Wu).", "",
+          "vs QI is computed once from the unrounded values (results.csv column 'vs QI (%)') and rounded once to one "
+          "decimal (column 'vs QI 1 decimal (%)'); this summary, the table and the figures of "
+          "deliverables/figures_stiffness/ all print that column.", "",
           "| case | t (mm) | N | N from | stiffest sequence | lambda 16x16 | lambda poly p=16 | lambda 8x8 | c (N/m) | "
           "strength margin | vs QI (%) | status | time (s) |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
@@ -915,8 +979,8 @@ def write_summary(defaults, verify, rows, probs, ga_sum, tradeoff, matlab, demo,
             L.append(f"| {r['case']} | {r['t (mm)']:.5g} | - | {r['N from']} | - | - | - | - | - | - | - | "
                      f"**{r['status']}** | - |")
             continue
-        vs = (f"{r['vs QI (%)']:+.2f} ({'lambda' if r['objective'] == 'max lambda' else 'c'})"
-              if r["vs QI (%)"] is not None else "no QI with the same N")
+        vs = (f"{r['vs QI 1 decimal (%)']:+.1f} ({'lambda' if r['objective'] == 'max lambda' else 'c'})"
+              if r["vs QI 1 decimal (%)"] is not None else "no QI with the same N")
         L.append(f"| {r['case']} | {r['t (mm)']:.5g} | {r['N (-)']} | {r['N from']} | {r['max_stiffness sequence']} | "
                  f"{_f(r['lambda 16x16 (-)'], 5)} | {_f(r['lambda poly p=16 (-)'], 5)} | {_f(r['lambda 8x8 (-)'], 5)} | "
                  f"{_f(r['c (N/m)'], 6)} | {_f(r['strength margin (-)'])} | {vs} | {r['status']} | "
@@ -968,7 +1032,9 @@ def write_summary(defaults, verify, rows, probs, ga_sum, tradeoff, matlab, demo,
     # stiffest vs strongest
     L += ["", "## Stiffest (max_stiffness) vs strongest (max_margin) at the same N", "",
           "max_margin maximises margin = min(strength margin, lambda 8x8) (objective of the fewest-plies study, "
-          "unchanged); its lambda is also given with 16 x 16 terms. With shear of both signs a design and its mirror "
+          "unchanged); its lambda is also given with 16 x 16 terms. Once lambda 8x8 reaches the strength margin of "
+          "the ply counts a larger lambda does not count, so many designs can tie; the exact search keeps the first "
+          "one it finds (see figure 4 below for the number of ties). With shear of both signs a design and its mirror "
           "(+45 and -45 swapped) have the same values; the two objectives break such ties differently, so 'same up "
           "to swap' is given.", "",
           "| case | t (mm) | N | stiffest | lambda 16x16 | c (N/m) | strength margin | strongest | lambda 16x16 | "
@@ -1006,18 +1072,33 @@ def write_summary(defaults, verify, rows, probs, ga_sum, tradeoff, matlab, demo,
                  f"{g['same sequence as exact 8x8 best']}/{g['runs']} | {_f(g['median evals to hit'])} | "
                  f"{g['target']} |")
     # tradeoff
-    L += ["", "## Stiffness-strength trade-off, C6 with 24 plies (figure 4)", ""]
+    L += ["", "## Stiffness-strength trade-off, C6 with 24 plies (figure 4)", "",
+          "'Strongest' is the max_margin design (objective and code unchanged). max_margin maximises margin = "
+          "min(strength margin, lambda 8x8). When lambda 8x8 is at least the strength margin of the ply counts, the "
+          "margin equals that strength margin and a larger lambda adds nothing, so every arrangement of the best ply "
+          "counts with lambda 8x8 >= its strength margin ties. The exact search keeps the first design it finds with "
+          "the largest margin (no further tie-break). Figure 4 marks that design: the max_margin sequence of "
+          "results.csv (the one of figure 3) when N = 24 is the default N, else the max_margin result at N = 24 "
+          "(tradeoff.json). Tie counts and lambda ranges are counted in the enumeration files (float32 values; "
+          "exact equality and a relative 1e-6 give the same counts).", ""]
     for tk, t in tradeoff.items():
-        note = ("default N of C6 for this thickness" if tk == "t0183" else
-                "NOT the default N of C6 for this thickness (default 32)")
-        L.append(f"- t = {T[tk] * 1e3:.5g} mm ({note}): {t['n_valid']:,} valid designs, {t['n_feasible']:,} meet both "
-                 f"constraints; stiffest lambda8 = {t['stiffest_lambda_8x8']:.6g} (strength margin "
-                 f"{t['stiffest_strength_margin']:.4g}), strongest margin = {t['strongest_margin']:.6g} "
-                 f"(lambda8 {t['strongest_lambda_8x8']:.4g}, strength margin {t['strongest_strength_margin']:.4g}), "
-                 f"QI lambda8 = {t['qi_lambda_8x8']:.4g}, strength margin {t['qi_strength_margin']:.4g}; "
-                 f"{len(t['pareto_lambda_8x8'])} Pareto points; enumeration = exact search: "
-                 f"{_f(t['enumeration_equals_exact'])}, = max_margin: {_f(t['enumeration_equals_max_margin'])}; "
-                 f"CPU {t['cpu_s']:.0f} s.")
+        g = (fig4 or {}).get(tk) or {}
+        dn = g.get("default_N")
+        note = (f"default N of C6 for this thickness" if dn == TRADEOFF[1] else
+                f"NOT the default N of C6 for this thickness (default {dn})")
+        txt = (f"- t = {T[tk] * 1e3:.5g} mm ({note}): {t['n_valid']:,} valid designs, {t['n_feasible']:,} meet both "
+               f"constraints; stiffest lambda8 = {t['stiffest_lambda_8x8']:.6g} (strength margin "
+               f"{t['stiffest_strength_margin']:.4g}); QI lambda8 = {t['qi_lambda_8x8']:.4g}, strength margin "
+               f"{t['qi_strength_margin']:.4g}; enumeration = exact search: {_f(t['enumeration_equals_exact'])}, = "
+               f"max_margin (margin value): {_f(t['enumeration_equals_max_margin'])}; CPU {t['cpu_s']:.0f} s.")
+        if g:
+            txt += (f" Strongest (max_margin, {g['strongest_source']}): {g['strongest_design']}, strength margin "
+                    f"{g['strongest_strength_margin']:.4f}, lambda8 {g['strongest_lambda_8x8']:.4f} (16x16 "
+                    f"{g['strongest_lambda_16x16']:.4f}), margin {g['strongest_margin']:.6f}. "
+                    f"{g['n_tied_for_strongest']:,} designs tie for the strongest; their lambda8 ranges from "
+                    f"{g['tied_lambda_8x8_min']:.4f} to {g['tied_lambda_8x8_max']:.4f}. Pareto points (strength "
+                    f"margin, lambda8): " + ", ".join(f"({a:.4f}, {b:.4f})" for a, b in g["pareto"]) + ".")
+        L.append(txt)
     # MATLAB, lambda check
     n_ml = sum(1 for v in matlab.values() if v.get("pass"))
     L += ["", "## Checks", "",

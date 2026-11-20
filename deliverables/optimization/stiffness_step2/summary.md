@@ -62,22 +62,24 @@ c and the strength margin were compared design by design with the first design o
 
 lambda: 16 x 16 value (reported); vs QI: change against [0/45/-45/90]_ks with the same N (lambda: increase of the 16 x 16 value, c: decrease). Strength margin = min(RF Max Stress, RF Tsai-Wu).
 
+vs QI is computed once from the unrounded values (results.csv column 'vs QI (%)') and rounded once to one decimal (column 'vs QI 1 decimal (%)'); this summary, the table and the figures of deliverables/figures_stiffness/ all print that column.
+
 | case | t (mm) | N | N from | stiffest sequence | lambda 16x16 | lambda poly p=16 | lambda 8x8 | c (N/m) | strength margin | vs QI (%) | status | time (s) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| C1 | 0.125 | 48 | QI_ks | [0_4/45/0_4/45/0_4/-45/0_4/90/0/-45/90_2]s | inf | inf | inf | 3062.36 | 3.434 | +50.31 (c) | proven optimum (proven, exact count-level search) | 2.2 |
-| C1 | 0.18288 | 32 | QI_ks | [0_4/45/0_4/-45/0_4/90_2]s | inf | inf | inf | 3007.37 | 3.511 | +52.40 (c) | proven optimum (proven, exact count-level search) | 0.5 |
-| C2 | 0.125 | 32 | QI_ks | [0_4/45/0_4/90/0_2/90/-45/90_2]s | inf | inf | inf | 3165.69 | 2.556 | +17.58 (c) | proven optimum (proven, exact count-level search) | 0.5 |
-| C2 | 0.18288 | 24 | QI_ks | [0_4/45/0_3/90/-45/90_2]s | inf | inf | inf | 2892.75 | 2.771 | +17.36 (c) | proven optimum (proven, exact count-level search) | 0.3 |
-| C3 | 0.125 | 24 | QI_ks | [45/-45_2/45/-45/45_2/-45/0_2/90_2]s | 3.0073 | 3.0073 | 3.0073 | 0.678171 | 138.7 | +26.25 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 1.4 |
-| C3 | 0.18288 | 16 | QI_ks | [45/-45_2/45/-45/45/0/90]s | 2.8163 | 2.8163 | 2.8163 | 0.806444 | 108.6 | +28.67 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 0.4 |
-| C4 | 0.125 | 24 | QI_ks | [45/-45_2/45/-45/45_2/-45/0_2/90_2]s | 2.0048 | 2.0048 | 2.0048 | 0.544699 | 201.4 | +26.25 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 1.1 |
-| C4 | 0.18288 | 24 | QI_ks | [45/-45_2/45/-45/45_2/-45/0_2/90_2]s | 6.2784 | 6.2784 | 6.2784 | 0.372306 | 294.7 | +26.25 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 1.1 |
-| C5 | 0.125 | 56 | QI_ks | [45_3/-45/45/-45_4/45/-45_4/45_2/-45/45/-45/45_3/0/90_2/0/90/0]s | 2.9039 | 2.9039 | 2.9054 | 381.811 | 9.312 | +25.51 (lambda) | INCOMPLETE (not proven, gap 0.455 % in the 8x8 model) | 3617.3 |
-| C5 | 0.18288 | 40 | QI_ks | [45_2/-45_2/45/-45_2/45/-45/45/-45_3/45_3/0/90_2/0]s | 3.317 | 3.3169 | 3.3186 | 359.73 | 9.884 | +26.95 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 77.6 |
-| C6 | 0.125 | 32 | QI_ks | [90_4/45/90_3/-45_3/45/0/45/0_2]s | 10.039 | 10.034 | 10.095 | 4422.44 | 1.603 | +88.84 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 17.8 |
-| C6 | 0.18288 | 24 | QI_ks | [90_4/45/-45/90_2/-45/45/0_2]s | 13.441 | 13.434 | 13.516 | 4395.37 | 1.617 | +102.93 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 4.0 |
-| C7 | 0.125 | 24 | QI_ks | [45/-45_2/45/-45/45_2/-45/0_2/90_2]s | 2.8798 | 2.8798 | 2.8798 | 0.962754 | 126.8 | +28.25 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 2.5 |
-| C7 | 0.18288 | 16 | QI_ks | [45/-45_2/45/-45/45/0/90]s | 2.69 | 2.69 | 2.6902 | 1.0705 | 103.2 | +31.48 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 0.8 |
+| C1 | 0.125 | 48 | QI_ks | [0_4/45/0_4/45/0_4/-45/0_4/90/0/-45/90_2]s | inf | inf | inf | 3062.36 | 3.434 | +50.3 (c) | proven optimum (proven, exact count-level search) | 2.2 |
+| C1 | 0.18288 | 32 | QI_ks | [0_4/45/0_4/-45/0_4/90_2]s | inf | inf | inf | 3007.37 | 3.511 | +52.4 (c) | proven optimum (proven, exact count-level search) | 0.5 |
+| C2 | 0.125 | 32 | QI_ks | [0_4/45/0_4/90/0_2/90/-45/90_2]s | inf | inf | inf | 3165.69 | 2.556 | +17.6 (c) | proven optimum (proven, exact count-level search) | 0.5 |
+| C2 | 0.18288 | 24 | QI_ks | [0_4/45/0_3/90/-45/90_2]s | inf | inf | inf | 2892.75 | 2.771 | +17.4 (c) | proven optimum (proven, exact count-level search) | 0.3 |
+| C3 | 0.125 | 24 | QI_ks | [45/-45_2/45/-45/45_2/-45/0_2/90_2]s | 3.0073 | 3.0073 | 3.0073 | 0.678171 | 138.7 | +26.2 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 1.4 |
+| C3 | 0.18288 | 16 | QI_ks | [45/-45_2/45/-45/45/0/90]s | 2.8163 | 2.8163 | 2.8163 | 0.806444 | 108.6 | +28.7 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 0.4 |
+| C4 | 0.125 | 24 | QI_ks | [45/-45_2/45/-45/45_2/-45/0_2/90_2]s | 2.0048 | 2.0048 | 2.0048 | 0.544699 | 201.4 | +26.2 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 1.1 |
+| C4 | 0.18288 | 24 | QI_ks | [45/-45_2/45/-45/45_2/-45/0_2/90_2]s | 6.2784 | 6.2784 | 6.2784 | 0.372306 | 294.7 | +26.2 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 1.1 |
+| C5 | 0.125 | 56 | QI_ks | [45_3/-45/45/-45_4/45/-45_4/45_2/-45/45/-45/45_3/0/90_2/0/90/0]s | 2.9039 | 2.9039 | 2.9054 | 381.811 | 9.312 | +25.5 (lambda) | INCOMPLETE (not proven, gap 0.455 % in the 8x8 model) | 3617.3 |
+| C5 | 0.18288 | 40 | QI_ks | [45_2/-45_2/45/-45_2/45/-45/45/-45_3/45_3/0/90_2/0]s | 3.317 | 3.3169 | 3.3186 | 359.73 | 9.884 | +26.9 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 77.6 |
+| C6 | 0.125 | 32 | QI_ks | [90_4/45/90_3/-45_3/45/0/45/0_2]s | 10.039 | 10.034 | 10.095 | 4422.44 | 1.603 | +88.8 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 17.8 |
+| C6 | 0.18288 | 24 | QI_ks | [90_4/45/-45/90_2/-45/45/0_2]s | 13.441 | 13.434 | 13.516 | 4395.37 | 1.617 | +102.9 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 4.0 |
+| C7 | 0.125 | 24 | QI_ks | [45/-45_2/45/-45/45_2/-45/0_2/90_2]s | 2.8798 | 2.8798 | 2.8798 | 0.962754 | 126.8 | +28.3 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 2.5 |
+| C7 | 0.18288 | 16 | QI_ks | [45/-45_2/45/-45/45/0/90]s | 2.69 | 2.69 | 2.6902 | 1.0705 | 103.2 | +31.5 (lambda) | proven optimum (proven in the 8x8 Ritz model) | 0.8 |
 | C8 | 0.125 | - | - | - | - | - | - | - | - | - | **INFEASIBLE: no QI laminate up to 64 plies and no min_plies design up to 64 plies** | - |
 | C8 | 0.18288 | 64 | min_plies fallback | [0_4/45/0_4/45/0_2/45_4/-45/45_2/-45_3/45/-45_4/90_2/-45/90_2]s | inf | inf | inf | 21808.9 | 1.512 | no QI with the same N | proven optimum (proven, exact count-level search) | 13.3 |
 
@@ -126,7 +128,7 @@ QI with the same N and bending stiffness:
 
 ## Stiffest (max_stiffness) vs strongest (max_margin) at the same N
 
-max_margin maximises margin = min(strength margin, lambda 8x8) (objective of the fewest-plies study, unchanged); its lambda is also given with 16 x 16 terms. With shear of both signs a design and its mirror (+45 and -45 swapped) have the same values; the two objectives break such ties differently, so 'same up to swap' is given.
+max_margin maximises margin = min(strength margin, lambda 8x8) (objective of the fewest-plies study, unchanged); its lambda is also given with 16 x 16 terms. Once lambda 8x8 reaches the strength margin of the ply counts a larger lambda does not count, so many designs can tie; the exact search keeps the first one it finds (see figure 4 below for the number of ties). With shear of both signs a design and its mirror (+45 and -45 swapped) have the same values; the two objectives break such ties differently, so 'same up to swap' is given.
 
 | case | t (mm) | N | stiffest | lambda 16x16 | c (N/m) | strength margin | strongest | lambda 16x16 | c (N/m) | strength margin | strongest status | same (up to +45/-45 swap) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -208,8 +210,10 @@ Hit = the run's best design reaches the objective value of the exact 8 x 8 optim
 
 ## Stiffness-strength trade-off, C6 with 24 plies (figure 4)
 
-- t = 0.125 mm (NOT the default N of C6 for this thickness (default 32)): 1,864,416 valid designs, 418,000 meet both constraints; stiffest lambda8 = 3.59313 (strength margin 1.517), strongest margin = 1.65652 (lambda8 1.66, strength margin 1.657), QI lambda8 = 2.128, strength margin 1.454; 7 Pareto points; enumeration = exact search: yes, = max_margin: yes; CPU 634 s.
-- t = 0.18288 mm (default N of C6 for this thickness): 1,864,416 valid designs, 1,826,904 meet both constraints; stiffest lambda8 = 13.5168 (strength margin 1.617), strongest margin = 2.42356 (lambda8 2.749, strength margin 2.424), QI lambda8 = 6.663, strength margin 2.127; 7 Pareto points; enumeration = exact search: yes, = max_margin: yes; CPU 639 s.
+'Strongest' is the max_margin design (objective and code unchanged). max_margin maximises margin = min(strength margin, lambda 8x8). When lambda 8x8 is at least the strength margin of the ply counts, the margin equals that strength margin and a larger lambda adds nothing, so every arrangement of the best ply counts with lambda 8x8 >= its strength margin ties. The exact search keeps the first design it finds with the largest margin (no further tie-break). Figure 4 marks that design: the max_margin sequence of results.csv (the one of figure 3) when N = 24 is the default N, else the max_margin result at N = 24 (tradeoff.json). Tie counts and lambda ranges are counted in the enumeration files (float32 values; exact equality and a relative 1e-6 give the same counts).
+
+- t = 0.125 mm (NOT the default N of C6 for this thickness (default 32)): 1,864,416 valid designs, 418,000 meet both constraints; stiffest lambda8 = 3.59313 (strength margin 1.517); QI lambda8 = 2.128, strength margin 1.454; enumeration = exact search: yes, = max_margin (margin value): yes; CPU 634 s. Strongest (max_margin, tradeoff.json (max_margin at N = 24, the same objective and tie-break)): [90/-45/45/0/90/-45/45/0/-45/0/45/0]s, strength margin 1.6565, lambda8 2.8472 (16x16 2.8299), margin 1.656522. 208,902 designs tie for the strongest; their lambda8 ranges from 1.6565 to 3.3878. Pareto points (strength margin, lambda8): (1.6565, 3.3878), (1.5172, 3.5931), (1.4537, 3.8028), (1.4231, 4.0059), (1.3031, 4.2278), (1.1049, 4.3163), (0.8515, 4.3604).
+- t = 0.18288 mm (default N of C6 for this thickness): 1,864,416 valid designs, 1,826,904 meet both constraints; stiffest lambda8 = 13.5168 (strength margin 1.617); QI lambda8 = 6.663, strength margin 2.127; enumeration = exact search: yes, = max_margin (margin value): yes; CPU 639 s. Strongest (max_margin, results.csv (max_margin at the default N)): [90/-45/45/0/90/-45/45/0/-45/0/45/0]s, strength margin 2.4236, lambda8 8.9164 (16x16 8.8623), margin 2.423559. 269,640 designs tie for the strongest; their lambda8 ranges from 2.7493 to 10.6091. Pareto points (strength margin, lambda8): (2.4236, 10.6091), (2.2198, 11.2523), (2.1268, 11.9088), (2.0821, 12.5451), (1.9064, 13.2400), (1.6166, 13.5168), (1.2457, 13.6552).
 
 ## Checks
 
@@ -237,11 +241,11 @@ Hit = the run's best design reaches the objective value of the exact 8 x 8 optim
 
 ## Reproducibility
 
-- Code: git commit b464444 (the step-2 code itself is in the commit that adds this folder); run from python/: `..\venv\Scripts\python.exe -m optimization.experiments.stiffness_step2` (add --reuse to continue a stopped run).
+- Code: git commit bedc356 (the step-2 code itself is in the commit that adds this folder); run from python/: `..\venv\Scripts\python.exe -m optimization.experiments.stiffness_step2` (add --reuse to continue a stopped run).
 - Python 3.12.10, numpy 2.5.4, scipy 1.18.1; Windows 11.
 - GA seeds 0-19, budget 10 000 distinct designs per run; at most 2 worker processes.
 - tradeoff_C6_N24_*.npz (lambda 8x8 and strength margin of every valid design, float32) are written by the 'tradeoff' stage of the same script.
-- Time of the last invocation (stages reused from earlier, stopped runs not counted; see the stage times in the tables and the run log): 3 s.
+- Time of the last invocation (stages reused from earlier, stopped runs not counted; see the stage times in the tables and the run log): 4 s.
 
 ## Run log (run_log.jsonl)
 
